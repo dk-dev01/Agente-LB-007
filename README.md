@@ -33,3 +33,4 @@ Objetivos Específicos:
 [] Comparar o desempenho do agente treinado com o baseline.
 [] Investigar situações em que o agente apresenta dificuldades ou falha.
 [] Desenvolver um protótipo visual para demonstrar o treinamento e o comportamento aprendido.
+Projeto de Inteligência Artificial, utilizando Q-Learning para ensinar um agente a superar obstáculos em um jogo até aprender e não errar mais, através tentativa e erro com experiências anteriores.
