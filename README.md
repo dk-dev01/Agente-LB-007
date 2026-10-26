@@ -2,6 +2,19 @@
 
 Projeto do Grupo 01 de Inteligência Artificial II: um agente aprende a percorrer um labirinto usando Q-learning tabular. Esta versão contém o núcleo científico e os experimentos; a interface web ainda será integrada. Não há garantia de ausência de erros ou de adaptação automática a novos mapas.
 
+## Problema de pesquisa e objetivos
+
+O Q-learning permite que um agente alcance objetivos com maior eficiência do que uma estratégia aleatória?
+
+O objetivo geral é desenvolver e avaliar um agente baseado em Q-learning capaz de alcançar objetivos em um jogo.
+
+- [x] Desenvolver o ambiente do labirinto.
+- [x] Implementar uma estratégia aleatória (baseline).
+- [x] Implementar o algoritmo Q-learning e treinar o agente.
+- [x] Registrar recompensas e comparar resultados com o baseline.
+- [x] Analisar erros e dificuldades iniciais.
+- [ ] Criar um protótipo visual.
+
 ## Executar
 
 Requer Python 3.10 ou superior. Sem bibliotecas externas.
@@ -30,6 +43,20 @@ Q(s,a) ← Q(s,a) + α [r + γ max Q(s',a') − Q(s,a)]
 Na chegada à saída, o alvo é apenas r. α controla o tamanho da atualização; γ desconta recompensas futuras. A política epsilon-greedy escolhe uma ação aleatória com probabilidade epsilon; caso contrário, usa a maior estimativa Q, com desempate aleatório reproduzível.
 
 O mapa permanece fixo durante cada treinamento. A avaliação usa a tabela congelada, sem exploração deliberada ou atualizações, e sementes separadas. Esse protocolo mede desempenho no mesmo ambiente, não generalização para labirintos novos. Epsilon permanece positivo no treino e alpha é constante: não alegamos que esta configuração finita satisfaz uma garantia assintótica de convergência.
+
+## Como ler os resultados
+
+Abra [resultados.xlsx](results/resultados.xlsx) no Excel para consultar a tabela formatada em português. É uma fotografia dos dados de `summary.csv` desta revisão.
+
+Para regenerar as tabelas em português sem instalar dependências:
+
+```bash
+python export_results.py
+```
+
+Esse comando lê `results/summary.csv` e atualiza `results/RESUMO.md` e `results/resumo_pt.csv` (ponto e vírgula, decimais com vírgula e UTF-8 com BOM, adequado ao Excel em português). O XLSX incluído não é atualizado por esse comando. O CSV original permanece com precisão integral para análise e reprodução.
+
+[Ver a tabela diretamente no GitHub](results/RESUMO.md).
 
 ## Resultados iniciais
 
