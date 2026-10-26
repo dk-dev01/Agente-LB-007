@@ -1,0 +1,127 @@
+{
+  "environment": {
+    "rows": [
+      "S.....",
+      ".##.#.",
+      "....#.",
+      ".##...",
+      "...##.",
+      ".#...G"
+    ],
+    "step_reward": -1.0,
+    "collision_reward": -3.0,
+    "goal_reward": 20.0
+  },
+  "config": {
+    "episodes": 1000,
+    "max_steps": 100,
+    "alpha": 0.1,
+    "gamma": 0.95,
+    "epsilon_start": 1.0,
+    "epsilon_end": 0.05
+  },
+  "training_seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "evaluation_episodes": 200,
+  "evaluation_seed_base": 100000,
+  "variants": {
+    "reference": {
+      "maze": {
+        "rows": [
+          "S.....",
+          ".##.#.",
+          "....#.",
+          ".##...",
+          "...##.",
+          ".#...G"
+        ],
+        "step_reward": -1.0,
+        "collision_reward": -3.0,
+        "goal_reward": 20.0
+      },
+      "config": {
+        "episodes": 1000,
+        "max_steps": 100,
+        "alpha": 0.1,
+        "gamma": 0.95,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.05
+      }
+    },
+    "E1_constant_exploration": {
+      "maze": {
+        "rows": [
+          "S.....",
+          ".##.#.",
+          "....#.",
+          ".##...",
+          "...##.",
+          ".#...G"
+        ],
+        "step_reward": -1.0,
+        "collision_reward": -3.0,
+        "goal_reward": 20.0
+      },
+      "config": {
+        "episodes": 1000,
+        "max_steps": 100,
+        "alpha": 0.1,
+        "gamma": 0.95,
+        "epsilon_start": 0.2,
+        "epsilon_end": 0.2
+      }
+    },
+    "E2_alpha_05": {
+      "maze": {
+        "rows": [
+          "S.....",
+          ".##.#.",
+          "....#.",
+          ".##...",
+          "...##.",
+          ".#...G"
+        ],
+        "step_reward": -1.0,
+        "collision_reward": -3.0,
+        "goal_reward": 20.0
+      },
+      "config": {
+        "episodes": 1000,
+        "max_steps": 100,
+        "alpha": 0.5,
+        "gamma": 0.95,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.05
+      }
+    },
+    "E3_step_minus_01": {
+      "maze": {
+        "rows": [
+          "S.....",
+          ".##.#.",
+          "....#.",
+          ".##...",
+          "...##.",
+          ".#...G"
+        ],
+        "step_reward": -0.1,
+        "collision_reward": -3.0,
+        "goal_reward": 20.0
+      },
+      "config": {
+        "episodes": 1000,
+        "max_steps": 100,
+        "alpha": 0.1,
+        "gamma": 0.95,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.05
+      }
+    }
+  },
+  "scope": "Mesmo mapa e início; episódios novos, Q congelada; não demonstra generalização a novos mapas."
+}

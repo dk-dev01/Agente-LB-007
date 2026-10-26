@@ -1,0 +1,26 @@
+[
+  {
+    "case": "little_training",
+    "shortest_path": 10,
+    "success_rate": 0.0,
+    "mean_steps_success": null,
+    "mean_return": -296.0,
+    "mean_collisions": 98.0
+  },
+  {
+    "case": "changed_map_without_retraining",
+    "shortest_path": 10,
+    "success_rate": 1.0,
+    "mean_steps_success": 10.0,
+    "mean_return": 11.0,
+    "mean_collisions": 0.0
+  },
+  {
+    "case": "unreachable_goal",
+    "shortest_path": null,
+    "success_rate": 0.0,
+    "mean_steps_success": null,
+    "mean_return": -284.0,
+    "mean_collisions": 92.0
+  }
+]
