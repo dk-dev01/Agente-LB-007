@@ -1,0 +1,9 @@
+﻿Configuração;Agente;Chegou à saída (%);Variação do sucesso (p.p.);Passos nos sucessos (média);Colisões por tentativa (média);Pontuação média
+Referência;Aleatório;31,50;5,24;63,67;40,53;-162,97
+Referência;Treinado;100,00;0,00;10,00;0,00;11,00
+E1: exploração constante;Aleatório;31,50;5,24;63,67;40,53;-162,97
+E1: exploração constante;Treinado;100,00;0,00;10,00;0,00;11,00
+E2: aprendizado com alpha 0,5;Aleatório;31,50;5,24;63,67;40,53;-162,97
+E2: aprendizado com alpha 0,5;Treinado;100,00;0,00;10,00;0,00;11,00
+E3: penalidade por passo -0,1;Aleatório;31,50;5,24;63,67;40,53;-120,06
+E3: penalidade por passo -0,1;Treinado;100,00;0,00;10,00;0,00;19,10
