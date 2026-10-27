@@ -1,6 +1,6 @@
 # Agente LB 007
 
-Projeto do Grupo 01 de Inteligência Artificial II: um agente aprende a percorrer um labirinto usando Q-learning tabular. Esta versão contém o núcleo científico e os experimentos; a interface web ainda será integrada. Não há garantia de ausência de erros ou de adaptação automática a novos mapas.
+Projeto do Grupo 01 de Inteligência Artificial II: um agente aprende a percorrer um labirinto usando Q-learning tabular. Inclui núcleo científico, experimentos e interface web local para visualizar o aprendizado. O desempenho é avaliado no mapa usado para treinar; mudanças no ambiente exigem novo treinamento.
 
 ## Problema de pesquisa e objetivos
 
@@ -13,11 +13,23 @@ O objetivo geral é desenvolver e avaliar um agente baseado em Q-learning capaz 
 - [x] Implementar o algoritmo Q-learning e treinar o agente.
 - [x] Registrar recompensas e comparar resultados com o baseline.
 - [x] Analisar erros e dificuldades iniciais.
-- [ ] Criar um protótipo visual.
+- [x] Criar um protótipo visual.
 
 ## Executar
 
 Requer Python 3.10 ou superior. Sem bibliotecas externas.
+
+### Interface visual
+
+No Windows, abra `INICIAR_INTERFACE.bat` ou execute na pasta do projeto:
+
+```bash
+python app.py --open
+```
+
+Se necessário, substitua `python` por `py -3`. Acesse http://127.0.0.1:8000 e mantenha o terminal aberto. Treine o agente, compare os resultados, anime as trajetórias e inspecione a tabela Q clicando nas casas. Você pode editar paredes e parâmetros para um novo treino. [Instruções e roteiro de demonstração](docs/INTERFACE.md).
+
+### Experimentos e testes
 
 ```bash
 python -m unittest discover -s tests -v
@@ -71,8 +83,12 @@ Ao mudar o mapa na interface, identifique a política antiga como treinada em ou
 ## Organização
 
 - `src/lb007/core.py`: ambiente, algoritmo e avaliação.
+- `app.py` e `web/`: servidor local e interface de demonstração com treino e avaliação reais.
+- `INICIAR_INTERFACE.bat`: inicialização no Windows.
 - `run.py`: protocolo experimental e exportação CSV/JSON.
 - `tests/test_core.py`: testes de dinâmica, equação, reprodutibilidade, avaliação congelada e casos inválidos.
+- `tests/test_app.py`: integração da interface, protocolo HTTP, validação e mapa sem saída.
+- `docs/INTERFACE.md`: execução, roteiro da demonstração e atualização da branch.
 - `docs/PLANO.md`: roteiro de seminário, divisão sugerida e pendências.
 - `docs/RESULTADOS.md`: evidências reais e ficha de experimentos.
 - `docs/DIARIO_IA.md`: registro inicial de apoio por IA, com revisão humana pendente.
@@ -83,4 +99,4 @@ Watkins, C. J. C. H.; Dayan, P. (1992). Q-learning. Machine Learning, 8, 279–2
 
 ## Entregas pendentes
 
-Protótipo web, slides, resumo no template vigente da FIB, folder/QR Code, carrossel, vídeo, Model Card e validação pelo grupo. O código foi preparado como primeira implementação para estudo e revisão; cada integrante precisa entender e defender suas escolhas.
+Slides, resumo no template vigente da FIB, folder/QR Code, carrossel, vídeo, Model Card e validação pelo grupo. O protótipo web roda localmente; sua publicação não faz parte desta versão. Cada integrante precisa entender e defender suas escolhas.
