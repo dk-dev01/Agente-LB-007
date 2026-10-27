@@ -29,3 +29,11 @@ Cinco testes passaram; protocolo com cinco sementes e quatro configurações foi
 - Reflexão sobre o que exigiu julgamento humano.
 
 Não preencher esses campos como concluídos antes das ações reais. Transferir este registro ao modelo oficial do diário quando revisado.
+
+## Continuação em 27/10/2026 — interface web
+
+Contexto fornecido: histórico do projeto e solicitação de interface após os experimentos. O PR #6 já havia sido integrado à main. Foi preparada uma interface local com servidor da biblioteca padrão Python, reaproveitando `train`, `evaluate` e `rollout` sem modificar o núcleo. Inclui edição de paredes, configuração do treino, avaliação de 200 tentativas por agente, animação de trajetórias, inspeção da tabela Q, gráfico do histórico e exportação JSON. A tela descarta resultados quando o ambiente ou os parâmetros mudam.
+
+Foram adicionadas verificações de integração HTTP, validação de entradas, reprodutibilidade e mapa sem caminho. Conferir o relato de entrega para o resultado da execução dos testes e da inspeção visual. A reprodução e a validação pelo grupo permanecem pendentes. Não foram alterados os resultados experimentais originais.
+
+Revisão da interface a pedido de Miguel: removidos slogans, introdução, ícones e explicações da tela. Mantidos os controles e resultados em um layout simples para demonstração ao professor. As explicações foram reunidas no guia de uso. O núcleo do algoritmo e os resultados experimentais originais foram preservados.
