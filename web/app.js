@@ -67,7 +67,8 @@ function stopAnimation() {
 function invalidate(text) {
   stopAnimation(); result = null; agent = [0, 0]; visited = new Set();
   $('model-state').textContent = 'Não treinado';
-  ['play-trained', 'play-random', 'download', 'policy'].forEach(id => $(id).disabled = true);
+  ['play-trained', 'play-random', 'download', 'download-xlsx', 'download-csv', 'policy'].forEach(id => $(id).disabled = true);
+  $('dataset-note').textContent = 'Treine para gerar a base de experiências desta execução.';
   $('policy').checked = false;
   ['random', 'trained'].forEach(method => ['success', 'steps', 'collisions'].forEach(metric => $(`${method}-${metric}`).textContent = '—'));
   $('chart').innerHTML = '<p class="muted">Sem dados.</p>';
@@ -110,6 +111,8 @@ function showResult() {
   $('evaluation-note').textContent = `Avaliação: ${result.evaluation.episodes} episódios por agente | Limite: ${result.config.max_steps} passos`;
   $('model-state').textContent = 'Treinado';
   ['play-trained', 'play-random', 'download', 'policy'].forEach(id => $(id).disabled = false);
+  ['download-xlsx', 'download-csv'].forEach(id => $(id).disabled = !result.dataset);
+  $('dataset-note').textContent = result.dataset ? `Base do treinamento atual: ${result.dataset.transitions.toLocaleString('pt-BR')} movimentos em ${result.config.episodes.toLocaleString('pt-BR')} episódios. Posições começam em zero.` : 'Base indisponível: atualize o aplicativo e execute um novo treinamento.';
   $('run-status').textContent = '';
   renderChart(result.history); renderQ(); renderBoard();
 }
@@ -183,3 +186,20 @@ $('download').addEventListener('click', () => {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 renderBoard(); renderQ();
+for (const format of ['xlsx', 'csv']) {
+  $(`download-${format}`).addEventListener('click', async () => {
+    if (!result?.dataset) return;
+    const execution = result;
+    const button = $(`download-${format}`);
+    button.disabled = true;
+    try {
+      const response = await fetch(execution.dataset[`${format}_url`]);
+      if (!response.ok) { const body = await response.json(); throw new Error(body.error || 'Falha ao baixar a base.'); }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob), link = document.createElement('a');
+      link.href = url; link.download = `base-lb007-semente-${execution.seed}-${execution.dataset.id.slice(0,8)}.${format}`; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) { message(error.message, true); }
+    finally { button.disabled = busy || result !== execution; }
+  });
+}

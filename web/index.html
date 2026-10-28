@@ -41,7 +41,8 @@
       </section>
     </div>
     <section class="panel comparison">
-      <div class="section-title"><h2>Resultados</h2><button id="download" disabled>Exportar JSON</button></div>
+      <div class="section-title"><h2>Resultados</h2><div class="export-buttons"><button id="download" disabled>Exportar JSON</button><button id="download-xlsx" disabled>Baixar base Excel</button><button id="download-csv" disabled>Baixar base CSV</button></div></div>
+      <p class="muted" id="dataset-note">A base registra cada movimento do treinamento desta execução.</p>
       <p class="muted" id="evaluation-note">Avaliação: 200 episódios por agente.</p>
       <div class="table-scroll"><table class="metrics">
         <thead><tr><th>Agente</th><th>Sucesso (%)</th><th>Passos (média nos sucessos)</th><th>Colisões (média)</th></tr></thead>

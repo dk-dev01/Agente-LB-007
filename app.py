@@ -3,10 +3,12 @@ import argparse
 from dataclasses import asdict
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
+import re
 from pathlib import Path
 import sys
 import threading
 import webbrowser
+from dataset_export import DatasetStore
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "src"))
@@ -42,9 +44,9 @@ def prepare(data):
     return maze, cfg, seed
 
 
-def simulate(data):
+def simulate(data, on_transition=None):
     maze, cfg, seed = prepare(data)
-    q, history = train(maze, cfg, seed)
+    q, history = train(maze, cfg, seed, on_transition=on_transition)
     # Avaliação congelada, com as mesmas sementes e limite para ambas as políticas.
     evaluation_seed, episodes = 100000, 200
     return {
@@ -76,7 +78,26 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(payload)
 
     def do_GET(self):
-        if self.path == "/api/config":
+        download = re.fullmatch(r'/api/datasets/([0-9a-f]{32})\.(xlsx|csv)', self.path)
+        if download:
+            token, kind = download.groups()
+            store = getattr(self.server, 'dataset_store', None)
+            if store is None:
+                return self.json_response(404, {'error': 'Base indisponível. Execute um treinamento novamente.'})
+            with store.lock:
+                path = store.file(token, kind)
+                if path is None:
+                    return self.json_response(404, {'error': 'Base expirada. Execute um treinamento novamente.'})
+                self.send_response(200)
+                content_type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' if kind == 'xlsx' else 'text/csv; charset=utf-8'
+                self.send_header('Content-Type', content_type)
+                self.send_header('Content-Disposition', f'attachment; filename="base-lb007-{token[:8]}.{kind}"')
+                self.send_header('Content-Length', str(path.stat().st_size))
+                self.send_header('Cache-Control', 'no-store')
+                self.end_headers()
+                with path.open('rb') as stream:
+                    self.copyfile(stream, self.wfile)
+        elif self.path == "/api/config":
             self.json_response(200, {"rows": list(DEFAULT_MAP), "config": asdict(Config())})
         elif self.path.startswith("/api/"):
             self.json_response(404, {"error": "Rota não encontrada."})
@@ -95,7 +116,9 @@ class Handler(SimpleHTTPRequestHandler):
             if not self.server.training_lock.acquire(blocking=False):
                 return self.json_response(409, {"error": "Já há um treinamento em andamento. Aguarde."})
             try:
-                result = simulate(data)
+                if not hasattr(self.server, 'dataset_store'):
+                    self.server.dataset_store = DatasetStore()
+                result = self.server.dataset_store.capture(simulate, data)
             finally:
                 self.server.training_lock.release()
             self.json_response(200, result)
@@ -123,6 +146,8 @@ def main():
         print("\nServidor encerrado.")
     finally:
         server.server_close()
+        if hasattr(server, 'dataset_store'):
+            server.dataset_store.close()
 
 
 if __name__ == "__main__":
