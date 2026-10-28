@@ -30,14 +30,14 @@ Desenvolver e avaliar um agente baseado em Q-Learning capaz de aprender a alcan�
 
 ### Objetivos específicos
 
-- [ ] Desenvolver um ambiente de jogo com estados, ações, obstáculos e objetivos definidos.
-- [ ] Implementar uma estratégia de ações aleatórias (baseline).
-- [ ] Implementar o algoritmo Q-Learning.
-- [ ] Treinar o agente por meio de tentativa e erro.
-- [ ] Registrar as recompensas e os resultados de cada episódio.
-- [ ] Comparar o desempenho do agente treinado com o baseline.
-- [ ] Analisar os erros, as falhas e as dificuldades encontradas.
-- [ ] Desenvolver um protótipo visual para demonstrar o comportamento aprendido.
+- [X] Desenvolver um ambiente de jogo com estados, ações, obstáculos e objetivos definidos.
+- [X] Implementar uma estratégia de ações aleatórias (baseline).
+- [X] Implementar o algoritmo Q-Learning.
+- [X] Treinar o agente por meio de tentativa e erro.
+- [X] Registrar as recompensas e os resultados de cada episódio.
+- [X] Comparar o desempenho do agente treinado com o baseline.
+- [X] Analisar os erros, as falhas e as dificuldades encontradas.
+- [X] Desenvolver um protótipo visual para demonstrar o comportamento aprendido.
 
 ## 🧠 4. Como o agente aprende?
 
@@ -83,37 +83,37 @@ Os resultados do agente treinado serão comparados com os resultados da estraté
 #### Planejamento
 - [x] Criar o repositório no GitHub.
 - [x] Convidar os integrantes do grupo.
-- [ ] Definir o escopo inicial do jogo.
-- [ ] Distribuir as responsabilidades entre os integrantes.
+- [X] Definir o escopo inicial do jogo.
+- [X] Distribuir as responsabilidades entre os integrantes.
 - [ ] Selecionar referências científicas e técnicas.
 
 #### Ambiente e implementação
-- [ ] Criar o ambiente do jogo.
-- [ ] Definir os estados e as ações do agente.
-- [ ] Definir as recompensas e penalidades.
-- [ ] Implementar a estratégia aleatória (baseline).
-- [ ] Implementar o Q-Learning.
-- [ ] Executar os primeiros testes.
+- [X] Criar o ambiente do jogo.
+- [X] Definir os estados e as ações do agente.
+- [X] Definir as recompensas e penalidades.
+- [X] Implementar a estratégia aleatória (baseline).
+- [X] Implementar o Q-Learning.
+- [X] Executar os primeiros testes.
 - [ ] Garantir que o pipeline funcione de ponta a ponta.
 
 #### Análise exploratória (EDA)
 - [ ] Registrar os resultados das simulações.
-- [ ] Analisar a taxa de sucesso e a quantidade de passos.
+- [X] Analisar a taxa de sucesso e a quantidade de passos.
 - [ ] Identificar pelo menos três descobertas relevantes.
 - [ ] Registrar as métricas iniciais.
 - [ ] Criar gráficos ou tabelas, quando aplicável.
 
 #### Documentação
-- [ ] Atualizar este README.
+- [X] Atualizar este README.
 - [ ] Selecionar pelo menos cinco referências relevantes.
 - [ ] Preparar o rascunho do resumo expandido.
-- [ ] Preencher o checklist oficial do professor.
-- [ ] Iniciar o Diário de IA.
+- [X] Preencher o checklist oficial do professor.
+- [X] Iniciar o Diário de IA.
 
 #### Revisão final
 - [ ] Integrar as alterações dos integrantes.
 - [ ] Testar o projeto completo.
-- [ ] Conferir os arquivos no GitHub.
+- [X] Conferir os arquivos no GitHub.
 - [ ] Preparar a demonstração para o professor.
 
 ### Checkpoint 2 — INVESTIGAR | 03/11/2026
@@ -152,11 +152,11 @@ Os resultados do agente treinado serão comparados com os resultados da estraté
 
 O projeto será desenvolvido por cinco integrantes, com responsabilidades distribuídas entre as seguintes áreas:
 
-- **Coordenação e integração:** organização do projeto, acompanhamento do cronograma e integração do código.
-- **Ambiente de jogo:** desenvolvimento do labirinto, dos estados, das ações e das regras.
-- **Algoritmo:** implementação e treinamento do Q-Learning.
-- **Baseline e avaliação:** implementação da estratégia aleatória e cálculo das métricas.
-- **Análise e documentação:** referências, análise exploratória, documentação e registros dos experimentos.
+- **Coordenação e integração (Derick):** organização do projeto, acompanhamento do cronograma e integração do código.
+- **Ambiente de jogo (Miguel):** desenvolvimento do labirinto, dos estados, das ações e das regras.
+- **Algoritmo (Luiz Antonio):** implementação e treinamento do Q-Learning.
+- **Baseline e avaliação (Andre Ricardo)):** implementação da estratégia aleatória e cálculo das métricas.
+- **Análise e documentação (Diego Gabriel):** referências, análise exploratória, documentação e registros dos experimentos.
 
 As responsabilidades específicas serão definidas e registradas pelo grupo.
 
@@ -166,7 +166,7 @@ As responsabilidades específicas serão definidas e registradas pelo grupo.
 - Git e GitHub.
 - GitHub Codespaces.
 - Bibliotecas de análise e visualização de dados, conforme a necessidade.
-- Streamlit ou tecnologia equivalente para o protótipo visual, caso seja adotado.
+- ChatGPT, Claude e Gemini.
 
 ## 📚 10. Referências iniciais
 
