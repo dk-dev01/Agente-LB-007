@@ -21,6 +21,9 @@ Se o comando do seu computador for `py`, use `py -3 app.py --open`. O navegador 
 5. Selecione uma casa e consulte seus valores Q. Ative **Política** para visualizar ações com maior Q: C (cima), D (direita), B (baixo) e E (esquerda). Em empate, mais de uma letra pode aparecer. A política usa desempate aleatório reproduzível.
 6. Altere alpha, epsilon, recompensa ou uma parede e treine novamente. A interface descarta os resultados anteriores, evitando usar uma tabela aprendida em outro ambiente. Início e saída permanecem fixos. É possível criar um mapa sem saída; a tela informa isso em uma linha. Ao treinar, o modo de edição é encerrado.
 7. Clique em **Exportar JSON** para registrar mapa, parâmetros, semente, avaliações, trajetórias, histórico e tabela Q.
+8. Clique em **Baixar base Excel** para receber um `.xlsx` com todos os movimentos do treinamento atual, cabeçalhos em português, ações por extenso, números em células numéricas, filtros e cabeçalho fixo. A aba **Execução** registra mapa, parâmetros e descrição das colunas. **Baixar base CSV** oferece os mesmos movimentos com ponto e vírgula, decimais com vírgula e UTF-8 com BOM, para o Excel em português. As posições `(linha, coluna)` começam em zero, como no código original.
+
+A base é registrada durante o próprio treino, sem executar outro treinamento ao baixar. O JSON contém o identificador e a contagem da base; os registros completos são baixados pelos novos botões. A cada mudança de mapa ou parâmetros os botões são desabilitados até um novo treino. As três bases mais recentes ficam em armazenamento temporário da sessão; baixe antes de encerrar o servidor. Downloads de bases expiradas mostram um aviso e exigem novo treinamento. As exportações não alteram os arquivos de `results/`.
 
 ## O que cada parâmetro significa
 
