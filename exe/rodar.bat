@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-cd /d "%~dp0"
+cd /d "%~dp0.."
 echo Iniciando a interface do Agente LB 007...
 py -3 -c "import sys; sys.exit(sys.version_info < (3, 10))" >nul 2>&1
 if not errorlevel 1 (

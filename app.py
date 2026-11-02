@@ -12,7 +12,7 @@ from dataset_export import DatasetStore
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "src"))
-from lb007.core import ACTION_NAMES, Config, DEFAULT_MAP, Maze, evaluate, rollout, train
+from labirintoA.core import ACTION_NAMES, Config, DEFAULT_MAP, Maze, evaluate, rollout, train
 
 
 def number(data, key, default, minimum, maximum, integer=False):
@@ -91,7 +91,7 @@ class Handler(SimpleHTTPRequestHandler):
                 self.send_response(200)
                 content_type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' if kind == 'xlsx' else 'text/csv; charset=utf-8'
                 self.send_header('Content-Type', content_type)
-                self.send_header('Content-Disposition', f'attachment; filename="base-lb007-{token[:8]}.{kind}"')
+                self.send_header('Content-Disposition', f'attachment; filename="base-labirintoA-{token[:8]}.{kind}"')
                 self.send_header('Content-Length', str(path.stat().st_size))
                 self.send_header('Cache-Control', 'no-store')
                 self.end_headers()
