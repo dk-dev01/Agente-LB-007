@@ -8,7 +8,7 @@ import sys
 from dataclasses import asdict, replace
 
 sys.path.insert(0, str(Path(__file__).parent / "src"))
-from lb007.core import Config, Maze, train, evaluate, rollout
+from labirintoA.core import Config, Maze, train, evaluate, rollout
 
 
 def write_csv(path, rows):
