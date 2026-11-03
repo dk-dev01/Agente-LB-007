@@ -1,0 +1,6 @@
+time,move,key,ball_before,ball_after,portal,moved,closer_to_goal,success,path_cells,outcome
+2026-11-02T19:17:03,1,right,"(656, 49)","(645, 63)","(661, 50)",True,False,False,2,blocked_or_wrong
+2026-11-02T19:17:04,2,down,"(644, 65)","(646, 19)","(673, 55)",True,False,False,103,blocked_or_wrong
+2026-11-02T19:17:04,3,down,"(649, 24)","(649, 24)","(656, 15)",False,False,True,93,success
+2026-11-02T19:33:59,1,right,"(381, 160)","(382, 160)","(641, 37)",False,True,False,88,progress
+2026-11-02T19:34:00,2,left,"(375, 152)","(374, 151)","(635, 54)",False,False,False,369,blocked_or_wrong
