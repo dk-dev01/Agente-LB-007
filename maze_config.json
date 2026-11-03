@@ -1,0 +1,8 @@
+{
+  "grid_scale_px": 4,
+  "key_hold_seconds": 1,
+  "observation_delay_seconds": 1,
+  "movement_threshold_px": 3,
+  "target_radius_px": 240,
+  "input_backend": "pynput"
+}
