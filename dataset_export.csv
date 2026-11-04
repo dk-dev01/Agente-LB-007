@@ -1,0 +1,22 @@
+﻿event_type,session_id,time,move,key,ball_before,ball_after,portal,moved,closer_to_goal,success,outcome,failure,reason,status,movement_count,distance_to_portal_before_px,distance_to_portal_after_px,path_cells,key_hold_seconds,observation_delay_seconds,image_before,image_after,calibration_image,observation_image,diagnostic_image
+session_started,20261102_214428_a8be69,2026-11-02T21:44:28-03:00,,,,,,,,,,,,,,,,,,,,,dataset\20261102_214428_a8be69\frames\calibration.png,,
+movement,20261102_214428_a8be69,2026-11-02T21:44:45-03:00,1,right,"[368, 171]","[368, 171]","[698, 173]",False,False,False,blocked_or_wrong,,,,,330.01,330.01,208,0.45,0.45,dataset\20261102_214428_a8be69\frames\move_00001_before.png,dataset\20261102_214428_a8be69\frames\move_00001_after.png,,,
+movement,20261102_214428_a8be69,2026-11-02T21:44:46-03:00,2,right,"[368, 171]","[368, 171]","[698, 173]",False,False,False,blocked_or_wrong,,,,,330.01,330.01,208,0.45,0.45,dataset\20261102_214428_a8be69\frames\move_00002_before.png,dataset\20261102_214428_a8be69\frames\move_00002_after.png,,,
+movement_failure,20261102_214428_a8be69,2026-11-02T21:44:47-03:00,2,,,,,,,,,,ball_position_unchanged_twice,,,,,,,,,,,,maze_sem_movimento.png
+session_ended,20261102_214428_a8be69,2026-11-02T21:44:48-03:00,,,,,,,,,,,,stopped,2,,,,,,,,,,
+session_started,20261102_220021_ac3e75,2026-11-02T22:00:21-03:00,,,,,,,,,,,,,,,,,,,,,dataset\20261102_220021_ac3e75\frames\calibration.png,,
+movement,20261102_220021_ac3e75,2026-11-02T22:00:26-03:00,1,right,"[383, 158]","[383, 158]","[386, 157]",False,False,True,success,,,,,3.16,3.16,2,0.45,0.65,dataset\20261102_220021_ac3e75\frames\move_00001_before.png,dataset\20261102_220021_ac3e75\frames\move_00001_after.png,,,
+level_completed,20261102_220021_ac3e75,2026-11-02T22:00:27-03:00,1,,,,,,,,,,,,,,,,,,,,,,
+movement,20261102_220021_ac3e75,2026-11-02T22:00:33-03:00,2,left,"[383, 150]","[383, 150]","[684, 26]",False,False,False,blocked_or_wrong,,,,,325.54,325.54,368,0.45,0.65,dataset\20261102_220021_ac3e75\frames\move_00002_before.png,dataset\20261102_220021_ac3e75\frames\move_00002_after.png,,,
+movement_failure,20261102_220021_ac3e75,2026-11-02T22:00:35-03:00,2,,,,,,,,,,ball_position_unchanged_twice,,,,,,,,,,,,maze_sem_movimento.png
+session_ended,20261102_220021_ac3e75,2026-11-02T22:00:35-03:00,,,,,,,,,,,,stopped,2,,,,,,,,,,
+session_started,20261102_220127_e9d13c,2026-11-02T22:01:27-03:00,,,,,,,,,,,,,,,,,,,,,dataset\20261102_220127_e9d13c\frames\calibration.png,,
+movement,20261102_220127_e9d13c,2026-11-02T22:01:32-03:00,1,right,"[358, 216]","[358, 216]","[672, 172]",False,False,False,blocked_or_wrong,,,,,317.07,317.07,193,0.45,0.65,dataset\20261102_220127_e9d13c\frames\move_00001_before.png,dataset\20261102_220127_e9d13c\frames\move_00001_after.png,,,
+movement,20261102_220127_e9d13c,2026-11-02T22:01:33-03:00,2,right,"[358, 216]","[358, 216]","[672, 172]",False,False,False,blocked_or_wrong,,,,,317.07,317.07,193,0.45,0.65,dataset\20261102_220127_e9d13c\frames\move_00002_before.png,dataset\20261102_220127_e9d13c\frames\move_00002_after.png,,,
+movement_failure,20261102_220127_e9d13c,2026-11-02T22:01:35-03:00,2,,,,,,,,,,ball_position_unchanged_twice,,,,,,,,,,,,maze_sem_movimento.png
+session_ended,20261102_220127_e9d13c,2026-11-02T22:01:35-03:00,,,,,,,,,,,,stopped,2,,,,,,,,,,
+session_started,20261102_220526_cb1e27,2026-11-02T22:05:26-03:00,,,,,,,,,,,,,,,,,,,,,dataset\20261102_220526_cb1e27\frames\calibration.png,,
+movement,20261102_220526_cb1e27,2026-11-02T22:05:29-03:00,1,right,"[449, 486]","[449, 486]","[831, 194]",False,False,False,blocked_or_wrong,,,,,480.82,480.82,165,1.0,1.0,dataset\20261102_220526_cb1e27\frames\move_00001_before.png,dataset\20261102_220526_cb1e27\frames\move_00001_after.png,,,
+movement,20261102_220526_cb1e27,2026-11-02T22:05:31-03:00,2,right,"[449, 486]","[449, 486]","[831, 194]",False,False,False,blocked_or_wrong,,,,,480.82,480.82,165,1.0,1.0,dataset\20261102_220526_cb1e27\frames\move_00002_before.png,dataset\20261102_220526_cb1e27\frames\move_00002_after.png,,,
+movement_failure,20261102_220526_cb1e27,2026-11-02T22:05:34-03:00,2,,,,,,,,,,ball_position_unchanged_twice,,,,,,,,,,,,maze_sem_movimento.png
+session_ended,20261102_220526_cb1e27,2026-11-02T22:05:34-03:00,,,,,,,,,,,,stopped,2,,,,,,,,,,

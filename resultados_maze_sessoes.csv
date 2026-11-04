@@ -1,0 +1,5 @@
+﻿session_id,started_at,ended_at,status,moves,moves_observed,progress,blocked_or_wrong,success_labels,planning_failures,completed_levels
+20261102_214428_a8be69,2026-11-02T21:44:28-03:00,2026-11-02T21:44:48-03:00,stopped,2,0,0,2,0,0,0
+20261102_220021_ac3e75,2026-11-02T22:00:21-03:00,2026-11-02T22:00:35-03:00,stopped,2,0,0,1,1,0,1
+20261102_220127_e9d13c,2026-11-02T22:01:27-03:00,2026-11-02T22:01:35-03:00,stopped,2,0,0,2,0,0,0
+20261102_220526_cb1e27,2026-11-02T22:05:26-03:00,2026-11-02T22:05:34-03:00,stopped,2,0,0,2,0,0,0

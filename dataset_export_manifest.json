@@ -1,0 +1,172 @@
+{
+  "source": "dataset/*/events.jsonl; fallback maze_memoria.jsonl",
+  "sessions": [
+    {
+      "session_id": "20261102_214428_a8be69",
+      "started_at": "2026-11-02T21:44:28-03:00",
+      "status": "stopped",
+      "board_region_screen_px": {
+        "x": 220,
+        "y": 124,
+        "width": 705,
+        "height": 418
+      },
+      "board_size_px": {
+        "width": 705,
+        "height": 418
+      },
+      "ball_calibration_px": [
+        368,
+        171
+      ],
+      "portal_calibration_px": [
+        698,
+        173
+      ],
+      "python": "3.14.6",
+      "platform": "Windows-10-10.0.19045-SP0",
+      "opencv": "5.0.0",
+      "numpy": "2.5.2",
+      "path_planner": "BFS on Otsu thresholded image",
+      "grid_scale_px": 4,
+      "key_hold_seconds": 0.45,
+      "notes": "Snapshots document screen observations; detector outcome labels are not verified ground truth.",
+      "started_control_at": "2026-11-02T21:44:45-03:00",
+      "ended_at": "2026-11-02T21:44:48-03:00",
+      "movement_count": 2
+    },
+    {
+      "session_id": "20261102_220021_ac3e75",
+      "started_at": "2026-11-02T22:00:21-03:00",
+      "status": "stopped",
+      "board_region_screen_px": {
+        "x": 206,
+        "y": 137,
+        "width": 719,
+        "height": 403
+      },
+      "board_size_px": {
+        "width": 719,
+        "height": 403
+      },
+      "ball_calibration_px": [
+        383,
+        158
+      ],
+      "portal_calibration_px": [
+        386,
+        157
+      ],
+      "python": "3.14.6",
+      "platform": "Windows-10-10.0.19045-SP0",
+      "opencv": "5.0.0",
+      "numpy": "2.5.2",
+      "path_planner": "BFS on Otsu thresholded image",
+      "grid_scale_px": 4,
+      "key_hold_seconds": 0.45,
+      "observation_delay_seconds": 0.65,
+      "configuration": {
+        "grid_scale_px": 4,
+        "key_hold_seconds": 0.45,
+        "observation_delay_seconds": 0.65,
+        "movement_threshold_px": 3,
+        "target_radius_px": 90
+      },
+      "notes": "Snapshots document screen observations; detector outcome labels are not verified ground truth.",
+      "started_control_at": "2026-11-02T22:00:26-03:00",
+      "ended_at": "2026-11-02T22:00:35-03:00",
+      "movement_count": 2
+    },
+    {
+      "session_id": "20261102_220127_e9d13c",
+      "started_at": "2026-11-02T22:01:27-03:00",
+      "status": "stopped",
+      "board_region_screen_px": {
+        "x": 225,
+        "y": 131,
+        "width": 691,
+        "height": 408
+      },
+      "board_size_px": {
+        "width": 691,
+        "height": 408
+      },
+      "ball_calibration_px": [
+        358,
+        216
+      ],
+      "portal_calibration_px": [
+        672,
+        172
+      ],
+      "python": "3.14.6",
+      "platform": "Windows-10-10.0.19045-SP0",
+      "opencv": "5.0.0",
+      "numpy": "2.5.2",
+      "path_planner": "BFS on Otsu thresholded image",
+      "grid_scale_px": 4,
+      "key_hold_seconds": 0.45,
+      "observation_delay_seconds": 0.65,
+      "configuration": {
+        "grid_scale_px": 4,
+        "key_hold_seconds": 0.45,
+        "observation_delay_seconds": 0.65,
+        "movement_threshold_px": 3,
+        "target_radius_px": 90
+      },
+      "notes": "Snapshots document screen observations; detector outcome labels are not verified ground truth.",
+      "started_control_at": "2026-11-02T22:01:32-03:00",
+      "ended_at": "2026-11-02T22:01:35-03:00",
+      "movement_count": 2
+    },
+    {
+      "session_id": "20261102_220526_cb1e27",
+      "started_at": "2026-11-02T22:05:26-03:00",
+      "status": "stopped",
+      "board_region_screen_px": {
+        "x": 155,
+        "y": 97,
+        "width": 833,
+        "height": 499
+      },
+      "board_size_px": {
+        "width": 833,
+        "height": 499
+      },
+      "ball_calibration_px": [
+        449,
+        486
+      ],
+      "portal_calibration_px": [
+        824,
+        195
+      ],
+      "python": "3.14.6",
+      "platform": "Windows-10-10.0.19045-SP0",
+      "opencv": "5.0.0",
+      "numpy": "2.5.2",
+      "path_planner": "BFS on Otsu thresholded image",
+      "grid_scale_px": 4,
+      "key_hold_seconds": 1.0,
+      "observation_delay_seconds": 1.0,
+      "configuration": {
+        "grid_scale_px": 4,
+        "key_hold_seconds": 1.0,
+        "observation_delay_seconds": 1.0,
+        "movement_threshold_px": 3,
+        "target_radius_px": 90
+      },
+      "notes": "Snapshots document screen observations; detector outcome labels are not verified ground truth.",
+      "started_control_at": "2026-11-02T22:05:29-03:00",
+      "ended_at": "2026-11-02T22:05:34-03:00",
+      "movement_count": 2
+    }
+  ],
+  "event_count": 21,
+  "movement_count": 8,
+  "outputs": {
+    "csv": "dataset_export.csv",
+    "jsonl": "dataset_export.jsonl"
+  },
+  "label_warning": "moved, closer_to_goal, success and outcome are automatic observations/heuristics, not manually verified ground-truth labels."
+}

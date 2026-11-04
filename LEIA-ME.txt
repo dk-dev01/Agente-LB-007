@@ -1,0 +1,108 @@
+Maze: Path of Light — agente visual experimental
+
+REQUISITOS
+- Windows com Python 3.10 ou mais recente
+- Jogo aberto e visível no navegador
+- Acesso às dependências em requirements.txt
+
+INSTALAÇÃO
+1. Abra o PowerShell na pasta que contém maze_agent.py e requirements.txt
+   (a pasta outputs).
+2. (Opcional, recomendado) crie um ambiente virtual: python -m venv .venv
+3. Ative-o: .venv\Scripts\Activate.ps1
+4. Instale: python -m pip install -r requirements.txt
+5. Rode: python maze_agent.py
+
+USO
+1. Deixe o jogo em uma fase, sem menu cobrindo o labirinto.
+2. A captura da tela será exibida apenas para você desenhar a seleção. Arraste
+   um retângulo sobre o tabuleiro e confirme com ENTER. Em seguida, a tela
+   inteira fecha e aparece somente o recorte escolhido. ENTER confirma o
+   recorte; R permite refazer.
+3. A prévia deve conter a bola e o portal. Clique no centro da bola e depois
+   no portal branco. Se um deles estiver fora do recorte, pressione R para
+   voltar e selecionar outra área.
+4. Depois da calibração, clique dentro da janela do jogo e pressione F9 para
+   iniciar. O agente envia uma seta, espera a animação e observa a posição.
+5. Pressione F8 para encerrar. Se não observar movimento após duas tentativas,
+   ele para e salva maze_sem_movimento.png.
+
+CALIBRAÇÃO E TESTE DE CONTROLES
+Se o tabuleiro não couber na captura, diminua o zoom do navegador com Ctrl+-
+ou use F11. Selecione o tabuleiro inteiro, incluindo o portal. A prévia de
+confirmação e a calibração mostram somente o recorte, ajustado à janela, e
+convertem os cliques de volta às coordenadas originais.
+
+Antes de tentar a rota automática, rode:
+  python diagnostico_controles.py
+Selecione uma área que realmente contenha a bola; confira na prévia, clique uma vez na bola, clique no jogo
+e pressione F9. Pressione manualmente uma seta de cada vez; pressione T para
+enviar uma seta sintética para a direita (teste em um corredor livre); F8 encerra. O
+diagnóstico salva capturas antes/depois e registra se detectou deslocamento em
+diagnosticos/<id>/eventos.jsonl. Se a imagem mudar e a bola não, ajuste a
+detecção/seleção; se nada mudar, confira foco, controles e se a seta manual move
+a bola no jogo. Esse script não usa portal nem calcula caminho.
+
+Os parâmetros do agente ficam em maze_config.json:
+- key_hold_seconds: duração do pressionamento enviado pelo agente. Ajuste em
+  passos pequenos (por exemplo, 0.45 para 0.60) se a seta não for registrada;
+  reduza se a bola avançar várias casas.
+- observation_delay_seconds: espera após soltar a seta, antes da captura.
+- movement_threshold_px: deslocamento mínimo considerado movimento.
+- target_radius_px: raio em que a bola é procurada após o comando.
+- grid_scale_px: resolução do mapa para o planejador; valores menores dão mais
+  detalhe e mais custo de processamento.
+- input_backend: `pynput` (padrão) ou `pyautogui`; experimente o outro apenas
+  se o teste sintético não chegar ao jogo.
+
+Altere um parâmetro por vez e compare `session.json`, as imagens antes/depois e
+`resultados_maze.md`. Comece verificando as setas manualmente antes de aumentar
+a duração dos comandos automáticos.
+
+O detector da bola procura componentes claros maiores (para incluir o brilho da
+esfera) e usa um raio de busca maior após cada seta. Os eventos agora registram
+`ball_detection_before` e `ball_detection_after` com método, área do brilho,
+limiar e confiança estimada. No diagnóstico, rode `python diagnostico_controles.py`
+e pressione T em um corredor livre à direita; confirme em `eventos.jsonl` se
+`detection_after.method` é `bright_component` e se `ball_after_px` mudou.
+
+O agente repete a leitura por até três ciclos quando não encontra rota. Se
+continuar sem rota, `maze_mapa_diagnostico.png` mostra o tabuleiro inteiro com
+verde para piso detectado, vermelho para parede, amarelo para a bola e branco
+para o portal. Confira se o recorte contém o contorno e todos os corredores.
+
+REGISTROS PARA DOCUMENTAÇÃO
+Cada execução cria uma pasta dataset/<id_da_sessao>/ com:
+- session.json: horário, região escolhida, calibração, ambiente e parâmetros.
+- events.jsonl: início/fim, comandos, resultados e falhas observadas.
+- frames/: captura da calibração e imagens antes/depois de cada comando.
+
+Depois de uma ou mais sessões, rode na mesma pasta:
+  python dataset_export.py
+  python export_results.py
+
+O primeiro reúne sessões do agente e diagnósticos manuais em dataset_export.csv,
+dataset_export.jsonl e dataset_export_manifest.json. O segundo cria resultados_maze.md e
+resultados_maze_sessoes.csv. Para salvar os relatórios com outro prefixo:
+  python dataset_export.py --out meu_dataset
+  python export_results.py --prefix meu_relatorio
+
+Os rótulos de movimento, progresso e sucesso são estimativas automáticas.
+Revise as capturas correspondentes antes de usá-los como rótulos confirmados.
+
+ARQUIVOS DE APRENDIZADO
+maze_memoria.jsonl guarda o histórico acumulado de eventos entre execuções.
+Cada pasta da sessão contém dados completos e capturas. Na troca de fase o agente pede nova calibração.
+Essa memória é um histórico para análise; esta versão não altera pesos de um
+modelo nem faz aprendizado autônomo de política. Ela reaproveita a observação
+atual e planeja de novo a cada passo.
+
+LIMITAÇÕES
+- A detecção de chão e parede usa o contraste da imagem: o chão é estimado como
+  a faixa mais escura e as paredes como pixels mais claros. Efeitos luminosos,
+  sombras, animações ou outra paleta podem confundir o mapa.
+- Se não encontrar uma rota, ele para sem repetir a calibração e grava
+  maze_mapa_diagnostico.png para ajudar a conferir o mapa detectado.
+- É um protótipo visual. Confira a primeira movimentação e mantenha o jogo
+  ativo. O fail-safe padrão do PyAutoGUI (mouse no canto superior esquerdo)
+  também interrompe a automação.
