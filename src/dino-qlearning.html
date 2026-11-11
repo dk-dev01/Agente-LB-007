@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dino Q-Learning</title>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #dde1e7;
+    --panel: #f6f7f9;
+    --line: #c3c9d2;
+    --ink: #1f242b;
+    --muted: #5d6673;
+    --accent: #1f4fd8;
+    --accent-ink: #ffffff;
+    --screen: #f7f7f7;
+    --danger: #b3261e;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: 20px;
+  }
+  h1 { margin: 0; font-size: 22px; letter-spacing: -0.01em; }
+  .sub { margin: 2px 0 16px; color: var(--muted); }
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; max-width: 1360px; margin: 0 auto; }
+  .head { max-width: 1360px; margin: 0 auto; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+  .stats { display: grid; grid-template-columns: repeat(6, 1fr); border-bottom: 1px solid var(--line); }
+  .stats div { padding: 10px 12px; border-right: 1px solid var(--line); min-width: 0; }
+  .stats div:last-child { border-right: 0; }
+  .stats .v { display: block; font-size: 19px; font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stats .k { color: var(--muted); font-size: 12.5px; }
+  canvas { display: block; width: 100%; height: auto; }
+  #game { background: var(--screen); }
+  #chart { border-top: 1px solid var(--line); background: #fff; border-radius: 0 0 10px 10px; }
+  .panel { padding: 4px 16px 16px; }
+  .panel h2 { font-size: 15px; margin: 18px 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  .row { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+  .row > label:first-child { flex: 1; }
+  .hint { color: var(--muted); font-size: 12.5px; margin: 2px 0 0; }
+  input[type=number] { width: 92px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font: inherit; background: #fff; font-variant-numeric: tabular-nums; }
+  input[type=range] { flex: 1.4; accent-color: var(--accent); }
+  .speedval { width: 56px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .check { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; cursor: pointer; }
+  .check input { margin-top: 4px; accent-color: var(--accent); }
+  .btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+  button { font: inherit; padding: 7px 12px; border-radius: 6px; border: 1px solid var(--line); background: #fff; color: var(--ink); cursor: pointer; }
+  button:hover { border-color: #8d96a3; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  button.danger { color: var(--danger); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .radios { display: flex; gap: 14px; margin: 6px 0; }
+  .radios label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+  #status { min-height: 1.4em; margin: 6px 0 0; font-size: 13.5px; color: var(--muted); }
+  #status.err { color: var(--danger); }
+  @media (max-width: 980px) {
+    .grid { grid-template-columns: 1fr; }
+    .stats { grid-template-columns: repeat(3, 1fr); }
+    .stats div:nth-child(3n) { border-right: 0; }
+    .stats div:nth-child(-n+3) { border-bottom: 1px solid var(--line); }
+  }
+</style>
+</head>
+<body>
+
+<div class="head">
+  <h1>Dino Q-Learning</h1>
+  <p class="sub">Vários dinossauros jogam ao mesmo tempo e aprendem numa única tabela Q. Sem rede neural.</p>
+</div>
+
+<main class="grid">
+  <section class="card" aria-label="Simulação">
+    <div class="stats">
+      <div><span class="v" id="sEp">1</span><span class="k">Episódio</span></div>
+      <div><span class="v" id="sAlive">0</span><span class="k">Vivos</span></div>
+      <div><span class="v" id="sDist">0</span><span class="k">Distância</span></div>
+      <div><span class="v" id="sBest">0</span><span class="k">Recorde</span></div>
+      <div><span class="v" id="sStates">0</span><span class="k">Estados na tabela</span></div>
+      <div><span class="v" id="sEps">0</span><span class="k">ε atual</span></div>
+    </div>
+    <canvas id="game" aria-label="Jogo do dinossauro"></canvas>
+    <canvas id="chart" aria-label="Gráfico de evolução"></canvas>
+  </section>
+
+  <aside class="card panel" aria-label="Controles">
+    <h2>Simulação</h2>
+    <div class="row">
+      <label for="speed">Velocidade</label>
+      <input type="range" id="speed" min="0" max="12" step="1" value="4">
+      <span class="speedval" id="speedVal">×5</span>
+    </div>
+    <p class="hint">Teclas: ↑ e ↓ mudam a velocidade, espaço pausa, D liga/desliga o desenho.</p>
+    <div class="btns">
+      <button id="btnPause" class="primary">Pausar</button>
+      <button id="btnNew">Novo episódio</button>
+    </div>
+    <div class="row">
+      <label for="nDinos">Dinossauros</label>
+      <input type="number" id="nDinos" min="1" max="300" step="1" value="30">
+    </div>
+    <p class="hint">A mudança vale a partir do próximo episódio. O dinossauro nº 1 (com contorno) sempre joga sem exploração.</p>
+    <div class="row"><label for="pCap">Limite de distância por episódio</label><input type="number" id="pCap" min="0" step="100000"></div>
+    <p class="hint">0 = sem limite: o episódio só termina quando todos morrem. Nesse caso o recorde sobe em tempo real.</p>
+    <label class="check"><input type="checkbox" id="chkDraw" checked> <span>Desenhar na tela (desligar acelera o treino)</span></label>
+
+    <h2>Aprendizado</h2>
+    <label class="check"><input type="checkbox" id="chkLearn" checked> <span>Treinar (desligado, só executa o que já aprendeu)</span></label>
+    <label class="check"><input type="checkbox" id="chkPlane"> <span>Modo avião: inclui espinhos longos e a ação de voar</span></label>
+    <div class="row"><label for="pAlpha">Taxa de aprendizado (α)</label><input type="number" id="pAlpha" min="0.001" max="1" step="0.01"></div>
+    <div class="row"><label for="pGamma">Desconto (γ)</label><input type="number" id="pGamma" min="0" max="0.999" step="0.01"></div>
+    <div class="row"><label for="pEps">Exploração atual (ε)</label><input type="number" id="pEps" min="0" max="1" step="0.01"></div>
+    <div class="row"><label for="pEpsMin">Exploração mínima</label><input type="number" id="pEpsMin" min="0" max="1" step="0.01"></div>
+    <div class="row"><label for="pDecay">Decaimento por episódio</label><input type="number" id="pDecay" min="0.5" max="1" step="0.005"></div>
+
+    <h2>Dados</h2>
+    <div class="btns">
+      <button id="btnExport" class="primary">Exportar aprendizado</button>
+      <button id="btnImport">Importar arquivo…</button>
+      <input type="file" id="fileIn" accept="application/json,.json" hidden>
+    </div>
+    <div class="radios" role="radiogroup" aria-label="Modo de importação">
+      <label><input type="radio" name="impMode" value="replace" checked> Substituir</label>
+      <label><input type="radio" name="impMode" value="merge"> Mesclar com o atual</label>
+    </div>
+    <p class="hint">O arquivo guarda a tabela Q, os parâmetros e o histórico de episódios.</p>
+    <div class="btns"><button id="btnReset" class="danger">Zerar aprendizado</button></div>
+    <p id="status" role="status" aria-live="polite"></p>
+  </aside>
+</main>
+
+<!-- ============================ MOTOR (sem DOM) ============================ -->
+<script id="engine">
+const DinoEngine = (() => {
+  'use strict';
+
+  const TICK_HZ = 200;                 // 1 tick = 0,005 s, igual ao jogo original
+  const W = 900, GROUND = 15;
+  const CACTI = [[32, 33], [23, 46], [15, 33], [49, 33], [73, 47]];   // [largura, altura]
+  const BIRD_W = 42, BIRD_H = 36, SPIKE_W = 810, SPIKE_H = 31, SPIKE_Y = 10;
+  const DECISION = 4;                  // o agente decide a cada 4 ticks
+  const DEATH = -100;                  // recompensa ao morrer
+  const TTC_STEP = 8, TTC_N = 29, NCLASS = 9, NV = 23;
+  const MAX_KEY = TTC_N * NCLASS * NV * 2;
+  const FORMAT = 'dino-qlearning';
+
+  const hit = (x1, y1, w1, h1, x2, y2, w2, h2) =>
+    !(x1 + w1 <= x2 || x1 >= x2 + w2 || y1 + h1 <= y2 || y1 >= y2 + h2);
+  const dw = d => d.estado === 1 ? 55 : d.estado === 4 ? 39 : 40;
+  const dh = d => d.estado === 1 ? 25 : d.estado === 4 ? 37 : 43;
+  const r4 = v => Math.round(v * 10000) / 10000;
+
+  function obsClass(o) {
+    if (o.type < 5) return o.type;                 // cactos
+    if (o.type === 5) return o.y < 35 ? 5 : (o.y < 53 ? 6 : 7);   // pássaro: baixo (pular), médio (abaixar), alto (nada)
+    return 8;                                      // espinhos
+  }
+
+  class Sim {
+    constructor(o = {}) {
+      this.alpha = o.alpha ?? 0.15;
+      this.gamma = o.gamma ?? 0.95;
+      this.epsilon = o.epsilon ?? 0.15;
+      this.epsilonMin = o.epsilonMin ?? 0.02;
+      this.epsilonDecay = o.epsilonDecay ?? 0.98;
+      this.planeMode = !!o.planeMode;
+      this.learn = o.learn !== false;
+      this.numDinos = o.numDinos ?? 30;
+      this.capDistance = o.capDistance ?? 0;       // 0 = sem limite de distância por episódio
+      this.q = new Map();                          // estado -> [q0, q1, q2, q3, visitas]
+      this.episode = 0;
+      this.bestEver = 0;
+      this.history = [];                           // { best, avg } por episódio
+      this.totalSteps = 0;
+      this.newEpisode();
+    }
+
+    /* ---------- episódio ---------- */
+    newEpisode() {
+      this.V = -3;
+      this.dist = 0;
+      this.tick = 0;
+      this.obstacles = [];
+      this.nextId = 0;
+      this.spikeCount = 0;
+      this.ended = false;
+      this.spawn(true);
+      while (this.obstacles[this.obstacles.length - 1].x < W + 800) this.spawn(false);
+      this.dinos = [];
+      for (let i = 0; i < this.numDinos; i++) {
+        this.dinos.push({
+          id: i, x: 100 + Math.random() * 80, y: GROUND, vy: 0, estado: 0,
+          cool: 0, desl: 0, alive: true, dist: 0,
+          ps: -1, pa: 0, acc: 0, action: 0
+        });
+      }
+      this.alive = this.dinos.length;
+    }
+
+    spawn(first) {
+      const last = this.obstacles[this.obstacles.length - 1];
+      const x = last ? last.x + last.w + 500 + (Math.random() * 200 - 100) : 650;
+      let type;
+      if (!first && this.planeMode && this.spikeCount >= 10) { type = 6; this.spikeCount = 0; }
+      else {
+        type = Math.floor(Math.random() * (first ? 5 : 6));
+        if (this.planeMode) this.spikeCount++;
+      }
+      let w, h, y = GROUND;
+      if (type < 5) { w = CACTI[type][0]; h = CACTI[type][1]; }
+      else if (type === 5) { w = BIRD_W; h = BIRD_H; y = 20 + Math.floor(Math.random() * 65); }
+      else { w = SPIKE_W; h = SPIKE_H; y = SPIKE_Y; }
+      this.obstacles.push({ id: this.nextId++, x, y, w, h, type });
+    }
+
+    nextObstacle(d) {
+      const left = d.x + 7;
+      for (const o of this.obstacles) if (o.x + o.w > left) return o;
+      return this.obstacles[this.obstacles.length - 1];
+    }
+
+    /* ---------- estado discretizado ---------- */
+    stateKey(d) {
+      const o = this.nextObstacle(d);
+      const dist = o.x - (d.x + 33);
+      let b = 0;                                   // 0 = obstáculo já sobre o dinossauro
+      if (dist >= 0) b = 1 + Math.min(TTC_N - 2, Math.floor(dist / (-this.V) / TTC_STEP));
+      let vs;
+      if (d.estado === 4) vs = 1;
+      else if (d.estado === 1) vs = 2;
+      else if (d.estado === 0) vs = 0;
+      else vs = 3 + Math.min(9, Math.floor((d.y - GROUND) / 12)) * 2 + (d.vy > 0 ? 1 : 0);
+      const ready = (this.planeMode && d.cool <= 0) ? 1 : 0;
+      return ((b * NCLASS + obsClass(o)) * NV + vs) * 2 + ready;
+    }
+
+    /* ---------- Q-learning ---------- */
+    row(s) {
+      let r = this.q.get(s);
+      if (!r) { r = new Float32Array(5); this.q.set(s, r); }
+      return r;
+    }
+
+    update(s, a, reward, s2, terminal) {
+      const nA = this.planeMode ? 4 : 3;
+      const r = this.row(s);
+      let target = reward;
+      if (!terminal) {
+        const q2 = this.q.get(s2);
+        if (q2) {
+          let m = q2[0];
+          for (let i = 1; i < nA; i++) if (q2[i] > m) m = q2[i];
+          target += this.gamma * m;
+        }
+      }
+      r[a] += this.alpha * (target - r[a]);
+      r[4] += 1;
+    }
+
+    epsFor(d) {
+      if (!this.learn) return 0;
+      const n = this.dinos.length;
+      if (n === 1) return this.epsilon;
+      if (d.id === 0) return 0;                    // dinossauro 0 só explora o que já sabe
+      return this.epsilon * (0.5 + d.id / (n - 1));
+    }
+
+    pick(s, d) {
+      const nA = this.planeMode ? 4 : 3;
+      const eps = this.epsFor(d);
+      if (eps > 0 && Math.random() < eps) {
+        const wts = nA === 4 ? [0.5, 0.22, 0.22, 0.06] : [0.5, 0.25, 0.25];
+        let u = Math.random();
+        for (let i = 0; i < nA; i++) { u -= wts[i]; if (u <= 0) return i; }
+        return 0;
+      }
+      const q = this.q.get(s);
+      if (!q) return 0;
+      let best = 0;
+      for (let i = 1; i < nA; i++) if (q[i] > q[best] + 1e-6) best = i;
+      return best;
+    }
+
+    decide(d) {
+      const s = this.stateKey(d);
+      if (this.learn && d.ps !== -1) this.update(d.ps, d.pa, d.acc, s, false);
+      d.ps = s; d.pa = this.pick(s, d); d.acc = 0; d.action = d.pa;
+    }
+
+    die(d) {
+      d.alive = false;
+      d.dist = this.dist;
+      this.alive--;
+      if (this.learn && d.ps !== -1) {
+        this.update(d.ps, d.pa, d.acc + DEATH, 0, true);
+        d.ps = -1;
+      }
+    }
+
+    /* ---------- física (portada do original) ---------- */
+    applyAction(d, a) {
+      const sp = -this.V;
+      const pular = a === 1, abaixar = a === 2, aviao = a === 3 && this.planeMode;
+      if (d.estado !== 4) {
+        if (d.estado !== 2) d.estado = 0;
+        if (abaixar && d.estado !== 2) d.estado = 1;
+        if (abaixar && d.estado === 2) { if (d.vy > 0) d.vy = 0; d.y -= 2; }
+        if (pular && d.estado !== 2) { d.estado = 2; d.y += 1; d.vy += 4.0; }
+        if (aviao && d.cool <= 0) {
+          d.estado = 4; d.y += 1;
+          if (d.vy <= 0.5 && d.y < 25) d.vy += 4.0;
+          d.cool = 4000;
+        }
+      } else if (d.desl >= 820) { d.desl = 0; d.estado = 2; }
+      else d.desl += sp;
+      d.cool -= sp;
+    }
+
+    step() {
+      const V = this.V;
+      for (const o of this.obstacles) o.x += V;
+      while (this.obstacles.length && this.obstacles[0].x + this.obstacles[0].w < -30) this.obstacles.shift();
+      while (this.obstacles[this.obstacles.length - 1].x < W + 800) this.spawn(false);
+
+      const decide = this.tick % DECISION === 0;
+      for (const d of this.dinos) {
+        if (!d.alive) { d.x += V; continue; }
+
+        if (d.y > GROUND) {                                      // gravidade
+          if (d.estado !== 4) d.vy -= 0.08;
+          else if (d.vy <= 0) d.vy = 0; else d.vy -= 0.08;
+          d.y += d.vy;
+        } else { d.vy = 0; d.y = GROUND; if (d.estado === 2) d.estado = 0; }
+
+        const o = this.nextObstacle(d);                          // colisão
+        if (hit(d.x + 7, d.y + 5, dw(d) - 14, dh(d) - 10, o.x, o.y, o.w, o.h)) { this.die(d); continue; }
+
+        if (this.learn) d.acc += (d.estado === 0 || d.estado === 1 ? 1 : 0.6) / DECISION;
+        if (decide) this.decide(d);
+        this.applyAction(d, d.action);
+      }
+
+      if (Math.abs(this.V) < 8) this.V -= 0.0005;
+      this.dist += -V;
+      this.tick++;
+      this.totalSteps++;
+      if (this.alive === 0 || (this.capDistance > 0 && this.dist > this.capDistance)) this.endEpisode();
+    }
+
+    run(n) { for (let i = 0; i < n; i++) this.step(); }
+
+    endEpisode() {
+      let sum = 0;
+      for (const d of this.dinos) { if (d.alive) d.dist = this.dist; sum += d.dist; }
+      const best = Math.max(...this.dinos.map(d => d.dist));
+      this.history.push({ best: Math.round(best), avg: Math.round(sum / this.dinos.length) });
+      if (this.history.length > 2000) this.history.splice(0, this.history.length - 2000);
+      this.bestEver = Math.max(this.bestEver, best);
+      this.episode++;
+      if (this.learn) this.epsilon = Math.max(this.epsilonMin, this.epsilon * this.epsilonDecay);
+      this.newEpisode();
+    }
+
+    /* ---------- exportação e importação ---------- */
+    exportData() {
+      const qtable = {};
+      for (const [k, v] of this.q) {
+        if (v[0] === 0 && v[1] === 0 && v[2] === 0 && v[3] === 0) continue;
+        qtable[k] = [r4(v[0]), r4(v[1]), r4(v[2]), r4(v[3]), v[4]];
+      }
+      return {
+        app: FORMAT, version: 1, savedAt: new Date().toISOString(),
+        config: {
+          alpha: this.alpha, gamma: this.gamma, epsilon: r4(this.epsilon),
+          epsilonMin: this.epsilonMin, epsilonDecay: this.epsilonDecay,
+          planeMode: this.planeMode, numDinos: this.numDinos, capDistance: this.capDistance
+        },
+        stats: {
+          episode: this.episode, bestEver: Math.round(this.bestEver),
+          totalSteps: this.totalSteps, history: this.history.slice(-1000)
+        },
+        qtable
+      };
+    }
+
+    importData(obj, mode) {
+      if (!obj || obj.app !== FORMAT || typeof obj.qtable !== 'object' || obj.qtable === null)
+        throw new Error('Este arquivo não é um aprendizado do Dino Q-Learning.');
+      if (obj.version !== 1) throw new Error('Versão do arquivo não suportada: ' + obj.version);
+      const incoming = new Map();
+      for (const [k, v] of Object.entries(obj.qtable)) {
+        const key = Number(k);
+        if (!Number.isInteger(key) || key < 0 || key >= MAX_KEY || !Array.isArray(v) || v.length < 4 ||
+            !v.slice(0, 5).every(x => Number.isFinite(x)))
+          throw new Error('Tabela Q inválida (entrada "' + k + '").');
+        const row = new Float32Array(5);
+        for (let i = 0; i < 4; i++) row[i] = v[i];
+        row[4] = Number.isFinite(v[4]) ? Math.max(1, v[4]) : 1;
+        incoming.set(key, row);
+      }
+      let overlap = 0;
+      if (mode === 'merge') {
+        for (const [k, inc] of incoming) {
+          const cur = this.q.get(k);
+          if (!cur) { this.q.set(k, inc); continue; }
+          overlap++;
+          const n1 = Math.max(1, cur[4]), n2 = inc[4], t = n1 + n2;
+          for (let i = 0; i < 4; i++) cur[i] = (cur[i] * n1 + inc[i] * n2) / t;
+          cur[4] = t;
+        }
+        this.bestEver = Math.max(this.bestEver, Number(obj.stats?.bestEver) || 0);
+      } else {
+        this.q = incoming;
+        const c = obj.config || {}, s = obj.stats || {};
+        const num = (v, d) => Number.isFinite(v) ? v : d;
+        this.alpha = num(c.alpha, this.alpha); this.gamma = num(c.gamma, this.gamma);
+        this.epsilon = num(c.epsilon, this.epsilon); this.epsilonMin = num(c.epsilonMin, this.epsilonMin);
+        this.epsilonDecay = num(c.epsilonDecay, this.epsilonDecay);
+        this.planeMode = !!c.planeMode;
+        this.capDistance = num(c.capDistance, this.capDistance);
+        this.episode = num(s.episode, 0); this.bestEver = num(s.bestEver, 0);
+        this.totalSteps = num(s.totalSteps, 0);
+        this.history = Array.isArray(s.history)
+          ? s.history.filter(h => h && Number.isFinite(h.best) && Number.isFinite(h.avg)).slice(-2000) : [];
+      }
+      this.newEpisode();
+      return { states: incoming.size, overlap };
+    }
+
+    reset() {
+      this.q = new Map(); this.episode = 0; this.bestEver = 0; this.history = []; this.totalSteps = 0;
+      this.newEpisode();
+    }
+  }
+
+  return { Sim, TICK_HZ, W, GROUND, DECISION };
+})();
+if (typeof module !== 'undefined') module.exports = DinoEngine;
+</script>
+
+<!-- ============================ INTERFACE ============================ -->
+<script id="ui">
+(() => {
+  if (typeof document === 'undefined') return;
+  const { Sim, TICK_HZ, W, GROUND } = DinoEngine;
+  const H = 300, GL = 250;                         // altura do canvas e linha do chão
+  const SPEEDS = [0.25, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 'max'];
+  const PALETTE = ['#e4572e', '#2e86ab', '#3bb273', '#f2a541', '#7768ae', '#d1507a', '#1b998b', '#8d6a43'];
+  const INK = '#535353';
+  const $ = id => document.getElementById(id);
+
+  const sim = new Sim({ numDinos: 30 });
+  let speedIdx = 4, paused = false, drawOn = true, acc = 0, lastTs = performance.now(), lastEpisode = -1, lastStats = 0;
+
+  /* ---------- canvas ---------- */
+  const game = $('game'), chart = $('chart');
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  game.width = W * dpr; game.height = H * dpr;
+  chart.width = W * dpr; chart.height = 170 * dpr;
+  const g = game.getContext('2d'), ch = chart.getContext('2d');
+
+  function drawDino(d, color, alpha, champion) {
+    const w = d.estado === 1 ? 55 : d.estado === 4 ? 39 : 40;
+    const h = d.estado === 1 ? 25 : d.estado === 4 ? 37 : 43;
+    const left = Math.round(d.x), bottom = GL - Math.round(d.y - GROUND), top = bottom - h;
+    const R = (x, y, ww, hh) => g.fillRect(left + x, top + y, ww, hh);
+    const step = ((sim.tick / 12) | 0) % 2;
+    g.globalAlpha = alpha;
+    g.fillStyle = color;
+    if (d.estado === 1 && d.alive) {                               // agachado
+      R(0, 4, 8, 6); R(0, 6, 36, 14); R(34, 0, 21, 13);
+      R(8, 20, 6, step ? 5 : 3); R(24, 20, 6, step ? 3 : 5);
+      g.fillStyle = '#fff'; R(46, 3, 4, 4);
+    } else if (d.estado === 4 && d.alive) {                        // voando de avião
+      R(20, 0, 16, 12); R(6, 8, 22, 14);
+      g.fillStyle = '#2b2b2b';
+      g.beginPath(); g.moveTo(left, top + 26); g.lineTo(left + 39, top + 26); g.lineTo(left + 33, top + 33); g.lineTo(left + 6, top + 33); g.fill();
+      g.beginPath(); g.moveTo(left, top + 18); g.lineTo(left + 9, top + 26); g.lineTo(left, top + 26); g.fill();
+      R(37, 19 + ((sim.tick / 2) & 1) * 7, 2, 10);
+      g.fillStyle = '#fff'; R(30, 3, 4, 4);
+    } else {                                                       // em pé, pulando ou morto
+      R(16, 0, 24, 15); R(8, 14, 22, 18); R(0, 16, 9, 9); R(3, 24, 7, 5); R(30, 22, 7, 3);
+      const air = d.estado === 2 || !d.alive;
+      R(10, 32, 6, air ? 11 : (step ? 11 : 6)); R(22, 32, 6, air ? 11 : (step ? 6 : 11));
+      g.fillStyle = '#fff';
+      if (d.alive) { R(30, 3, 4, 4); }
+      else { g.strokeStyle = '#fff'; g.lineWidth = 1.5; g.beginPath();
+        g.moveTo(left + 29, top + 2); g.lineTo(left + 35, top + 8); g.moveTo(left + 35, top + 2); g.lineTo(left + 29, top + 8); g.stroke(); }
+    }
+    if (champion && d.alive) {
+      g.globalAlpha = 1; g.strokeStyle = '#111'; g.lineWidth = 2;
+      g.strokeRect(left - 3, top - 3, w + 6, h + 6);
+    }
+    g.globalAlpha = 1;
+  }
+
+  function drawObstacle(o) {
+    const left = Math.round(o.x), bottom = GL - Math.round(o.y - GROUND), top = bottom - o.h;
+    g.fillStyle = INK;
+    if (o.type < 5) {
+      const trunks = o.w >= 49 ? 2 : 1, tw = Math.max(7, Math.round(o.w / (trunks === 2 ? 4.5 : 2.6)));
+      for (let t = 0; t < trunks; t++) {
+        const cx = left + (o.w / (trunks * 2)) * (2 * t + 1) - tw / 2;
+        const th = t === 1 ? o.h * 0.8 : o.h;
+        g.fillRect(cx, bottom - th, tw, th);
+        if (o.w > 20) { g.fillRect(cx - 6, bottom - th * 0.6, 6, 4); g.fillRect(cx - 6, bottom - th * 0.6 - 8, 4, 12);
+                        g.fillRect(cx + tw, bottom - th * 0.45, 6, 4); g.fillRect(cx + tw + 2, bottom - th * 0.45 - 8, 4, 12); }
+      }
+    } else if (o.type === 5) {                                     // pássaro
+      const up = ((sim.dist / 60) | 0) % 2 === 0;
+      g.fillRect(left + 6, top + 14, 28, 10); g.fillRect(left + 32, top + 12, 10, 6); g.fillRect(left, top + 16, 8, 4);
+      g.beginPath();
+      if (up) { g.moveTo(left + 12, top + 14); g.lineTo(left + 26, top + 14); g.lineTo(left + 20, top); }
+      else { g.moveTo(left + 12, top + 24); g.lineTo(left + 26, top + 24); g.lineTo(left + 20, top + 36); }
+      g.fill();
+    } else {                                                       // espinhos
+      for (let x = 0; x < o.w; x += 18) {
+        const sx = left + x;
+        if (sx > W || sx + 18 < 0) continue;
+        g.beginPath(); g.moveTo(sx, bottom); g.lineTo(sx + 9, top); g.lineTo(sx + 18, bottom); g.fill();
+      }
+    }
+  }
+
+  function draw() {
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.fillStyle = '#f7f7f7'; g.fillRect(0, 0, W, H);
+    for (let i = 0; i < 3; i++) {                                  // nuvens
+      const cx = (((i * 340 + 120 - sim.dist * 0.08) % (W + 120)) + W + 120) % (W + 120) - 60;
+      g.fillStyle = '#e2e2e2'; g.fillRect(cx, 60 + i * 28, 46, 10); g.fillRect(cx + 10, 54 + i * 28, 24, 6);
+    }
+    g.fillStyle = INK; g.fillRect(0, GL + 1, W, 2);
+    g.fillStyle = '#b5b5b5';
+    for (let i = 0; i < 34; i++) {
+      const x = (((i * 79 - sim.dist) % W) + W) % W;
+      g.fillRect(x, GL + 8 + (i % 3) * 6, 5 + (i % 4) * 4, 2);
+    }
+    for (const o of sim.obstacles) if (o.x < W && o.x + o.w > 0) drawObstacle(o);
+    for (const d of sim.dinos) if (!d.alive && d.x > -60) drawDino(d, PALETTE[d.id % 8], 0.22, false);
+    for (const d of sim.dinos) if (d.alive && d.id !== 0) drawDino(d, PALETTE[d.id % 8], 0.6, false);
+    const champ = sim.dinos[0];
+    if (champ) drawDino(champ, PALETTE[0], champ.alive ? 1 : 0.3, true);
+  }
+
+  function drawChart() {
+    const cw = W, chh = 170, c = ch;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.fillStyle = '#fff'; c.fillRect(0, 0, cw, chh);
+    const hist = sim.history.slice(-300), padL = 72, padR = 14, padT = 26, padB = 22;
+    c.font = '12px system-ui, sans-serif'; c.textBaseline = 'middle';
+    c.fillStyle = '#5d6673'; c.textAlign = 'left';
+    c.fillText('Distância por episódio', padL, 11);
+    c.fillStyle = '#1f4fd8'; c.fillRect(padL + 150, 7, 14, 3); c.fillStyle = '#5d6673'; c.fillText('melhor', padL + 170, 11);
+    c.fillStyle = '#9aa3af'; c.fillRect(padL + 226, 7, 14, 3); c.fillStyle = '#5d6673'; c.fillText('média', padL + 246, 11);
+    if (hist.length < 2) { c.fillStyle = '#9aa3af'; c.textAlign = 'center'; c.fillText('O gráfico aparece depois de 2 episódios.', cw / 2, chh / 2); return; }
+    const max = Math.max(1, ...hist.map(h => h.best)), pw = cw - padL - padR, ph = chh - padT - padB;
+    c.strokeStyle = '#e4e7ec'; c.lineWidth = 1; c.textAlign = 'right';
+    for (let i = 0; i <= 4; i++) {
+      const y = padT + ph * i / 4; c.beginPath(); c.moveTo(padL, y); c.lineTo(cw - padR, y); c.stroke();
+      c.fillStyle = '#5d6673'; c.fillText(Math.round(max * (1 - i / 4)).toLocaleString('pt-BR'), padL - 6, y);
+    }
+    const line = (key, color, wd) => {
+      c.strokeStyle = color; c.lineWidth = wd; c.beginPath();
+      hist.forEach((h, i) => { const x = padL + pw * i / (hist.length - 1), y = padT + ph * (1 - h[key] / max); i ? c.lineTo(x, y) : c.moveTo(x, y); });
+      c.stroke();
+    };
+    line('avg', '#9aa3af', 1.5); line('best', '#1f4fd8', 2);
+    c.fillStyle = '#5d6673'; c.textAlign = 'center';
+    const first = sim.episode - hist.length + 1;
+    c.fillText('episódio ' + first, padL + 30, chh - 8); c.fillText('episódio ' + sim.episode, cw - padR - 40, chh - 8);
+  }
+
+  /* ---------- painel ---------- */
+  const fmt = n => Math.round(n).toLocaleString('pt-BR');
+  function updateStats() {
+    $('sEp').textContent = fmt(sim.episode + 1);
+    $('sAlive').textContent = sim.alive + '/' + sim.dinos.length;
+    $('sDist').textContent = fmt(sim.dist);
+    $('sBest').textContent = fmt(Math.max(sim.bestEver, sim.dist));
+    $('sStates').textContent = fmt(sim.q.size);
+    $('sEps').textContent = sim.learn ? sim.epsilon.toFixed(3) : '0';
+    const f = $('pEps'); if (document.activeElement !== f) f.value = sim.epsilon.toFixed(3);
+  }
+  function syncInputs() {
+    $('nDinos').value = sim.numDinos; $('pAlpha').value = sim.alpha; $('pGamma').value = sim.gamma;
+    $('pEps').value = sim.epsilon.toFixed(3); $('pEpsMin').value = sim.epsilonMin; $('pDecay').value = sim.epsilonDecay;
+    $('pCap').value = sim.capDistance; $('chkLearn').checked = sim.learn; $('chkPlane').checked = sim.planeMode;
+  }
+  function setStatus(msg, err) { const s = $('status'); s.textContent = msg; s.className = err ? 'err' : ''; }
+  function setSpeed(i) {
+    speedIdx = Math.max(0, Math.min(SPEEDS.length - 1, i));
+    $('speed').value = speedIdx;
+    $('speedVal').textContent = SPEEDS[speedIdx] === 'max' ? 'Máx' : '×' + SPEEDS[speedIdx];
+    acc = 0;
+  }
+  function setPaused(p) { paused = p; $('btnPause').textContent = p ? 'Continuar' : 'Pausar'; }
+
+  const numInput = (id, key, lo, hi) => $(id).addEventListener('input', e => {
+    const v = parseFloat(e.target.value);
+    if (Number.isFinite(v)) sim[key] = Math.min(hi, Math.max(lo, v));
+  });
+  numInput('pAlpha', 'alpha', 0.001, 1); numInput('pGamma', 'gamma', 0, 0.999);
+  numInput('pEps', 'epsilon', 0, 1); numInput('pEpsMin', 'epsilonMin', 0, 1); numInput('pDecay', 'epsilonDecay', 0.5, 1);
+  $('pCap').addEventListener('input', e => {
+    const v = parseFloat(e.target.value);
+    if (Number.isFinite(v)) sim.capDistance = Math.max(0, v);
+  });
+  $('nDinos').addEventListener('input', e => {
+    const v = parseInt(e.target.value, 10);
+    if (Number.isFinite(v)) sim.numDinos = Math.min(300, Math.max(1, v));
+  });
+  $('speed').addEventListener('input', e => setSpeed(+e.target.value));
+  $('btnPause').addEventListener('click', () => setPaused(!paused));
+  $('btnNew').addEventListener('click', () => { sim.newEpisode(); setStatus('Novo episódio iniciado.'); });
+  $('chkDraw').addEventListener('change', e => { drawOn = e.target.checked; if (!drawOn) { g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = '#f7f7f7'; g.fillRect(0, 0, W, H); g.fillStyle = '#5d6673'; g.font = '15px system-ui'; g.textAlign = 'center'; g.fillText('Desenho desligado: o treino roda mais rápido.', W / 2, H / 2); } });
+  $('chkLearn').addEventListener('change', e => { sim.learn = e.target.checked; });
+  $('chkPlane').addEventListener('change', e => { sim.planeMode = e.target.checked; sim.newEpisode(); setStatus(sim.planeMode ? 'Modo avião ligado: espinhos longos exigem voar.' : 'Modo avião desligado.'); });
+
+  /* ---------- exportar / importar ---------- */
+  $('btnExport').addEventListener('click', () => {
+    const data = sim.exportData();
+    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'dino-qlearning_ep' + sim.episode + '_rec' + Math.round(sim.bestEver) + '.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    setStatus('Exportado: ' + fmt(Object.keys(data.qtable).length) + ' estados, ' + fmt(sim.episode) + ' episódios.');
+  });
+  $('btnImport').addEventListener('click', () => $('fileIn').click());
+  $('fileIn').addEventListener('change', e => {
+    const file = e.target.files[0]; e.target.value = '';
+    if (!file) return;
+    const mode = document.querySelector('input[name=impMode]:checked').value;
+    const rd = new FileReader();
+    rd.onload = () => {
+      try {
+        const res = sim.importData(JSON.parse(rd.result), mode);
+        syncInputs(); lastEpisode = -1;
+        setStatus(mode === 'merge'
+          ? 'Mesclado: ' + fmt(res.states) + ' estados do arquivo (' + fmt(res.overlap) + ' em comum).'
+          : 'Importado: ' + fmt(res.states) + ' estados.');
+      } catch (err) { setStatus(err.message || 'Não foi possível ler o arquivo.', true); }
+    };
+    rd.onerror = () => setStatus('Não foi possível ler o arquivo.', true);
+    rd.readAsText(file);
+  });
+  $('btnReset').addEventListener('click', () => {
+    if (confirm('Apagar toda a tabela Q e o histórico? Exporte antes se quiser guardar.')) { sim.reset(); lastEpisode = -1; syncInputs(); setStatus('Aprendizado zerado.'); }
+  });
+
+  window.addEventListener('keydown', e => {
+    const t = e.target.tagName;
+    if (t === 'INPUT' || t === 'SELECT' || t === 'TEXTAREA' || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === 'ArrowUp') { setSpeed(speedIdx + 1); e.preventDefault(); }
+    else if (e.key === 'ArrowDown') { setSpeed(speedIdx - 1); e.preventDefault(); }
+    else if (e.key === ' ') { if (t !== 'BUTTON') { setPaused(!paused); e.preventDefault(); } }
+    else if (e.key === 'd' || e.key === 'D') { $('chkDraw').click(); }
+  });
+
+  /* ---------- laço principal ---------- */
+  function frame(ts) {
+    requestAnimationFrame(frame);
+    const dt = Math.min(100, ts - lastTs); lastTs = ts;
+    if (!paused) {
+      const t0 = performance.now(), sp = SPEEDS[speedIdx];
+      if (sp === 'max') {
+        const budget = drawOn ? 16 : 30;
+        while (performance.now() - t0 < budget) sim.run(100);
+      } else {
+        acc += dt / 1000 * TICK_HZ * sp;
+        let n = Math.floor(acc); acc -= n;
+        while (n > 0) {
+          const k = Math.min(n, 100); sim.run(k); n -= k;
+          if (performance.now() - t0 > 20) { acc = 0; break; }
+        }
+      }
+    }
+    if (drawOn) draw();
+    if (sim.episode !== lastEpisode) { lastEpisode = sim.episode; drawChart(); }
+    if (ts - lastStats > 120) { lastStats = ts; updateStats(); }
+  }
+
+  syncInputs(); setSpeed(speedIdx); updateStats(); drawChart();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
