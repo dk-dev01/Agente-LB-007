@@ -1,140 +1,3 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Dino Q-Learning</title>
-<style>
-  :root {
-    color-scheme: light;
-    --bg: #dde1e7;
-    --panel: #f6f7f9;
-    --line: #c3c9d2;
-    --ink: #1f242b;
-    --muted: #5d6673;
-    --accent: #1f4fd8;
-    --accent-ink: #ffffff;
-    --screen: #f7f7f7;
-    --danger: #b3261e;
-  }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; }
-  body {
-    background: var(--bg);
-    color: var(--ink);
-    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    padding: 20px;
-  }
-  h1 { margin: 0; font-size: 22px; letter-spacing: -0.01em; }
-  .sub { margin: 2px 0 16px; color: var(--muted); }
-  .grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; max-width: 1360px; margin: 0 auto; }
-  .head { max-width: 1360px; margin: 0 auto; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
-  .stats { display: grid; grid-template-columns: repeat(6, 1fr); border-bottom: 1px solid var(--line); }
-  .stats div { padding: 10px 12px; border-right: 1px solid var(--line); min-width: 0; }
-  .stats div:last-child { border-right: 0; }
-  .stats .v { display: block; font-size: 19px; font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .stats .k { color: var(--muted); font-size: 12.5px; }
-  canvas { display: block; width: 100%; height: auto; }
-  #game { background: var(--screen); }
-  #chart { border-top: 1px solid var(--line); background: #fff; border-radius: 0 0 10px 10px; }
-  .panel { padding: 4px 16px 16px; }
-  .panel h2 { font-size: 15px; margin: 18px 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
-  .row { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
-  .row > label:first-child { flex: 1; }
-  .hint { color: var(--muted); font-size: 12.5px; margin: 2px 0 0; }
-  input[type=number] { width: 92px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font: inherit; background: #fff; font-variant-numeric: tabular-nums; }
-  input[type=range] { flex: 1.4; accent-color: var(--accent); }
-  .speedval { width: 56px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
-  .check { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; cursor: pointer; }
-  .check input { margin-top: 4px; accent-color: var(--accent); }
-  .btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
-  button { font: inherit; padding: 7px 12px; border-radius: 6px; border: 1px solid var(--line); background: #fff; color: var(--ink); cursor: pointer; }
-  button:hover { border-color: #8d96a3; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-  button.danger { color: var(--danger); }
-  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .radios { display: flex; gap: 14px; margin: 6px 0; }
-  .radios label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
-  #status { min-height: 1.4em; margin: 6px 0 0; font-size: 13.5px; color: var(--muted); }
-  #status.err { color: var(--danger); }
-  @media (max-width: 980px) {
-    .grid { grid-template-columns: 1fr; }
-    .stats { grid-template-columns: repeat(3, 1fr); }
-    .stats div:nth-child(3n) { border-right: 0; }
-    .stats div:nth-child(-n+3) { border-bottom: 1px solid var(--line); }
-  }
-</style>
-</head>
-<body>
-
-<div class="head">
-  <h1>Dino Q-Learning</h1>
-  <p class="sub">Vários dinossauros jogam ao mesmo tempo e aprendem numa única tabela Q. Sem rede neural.</p>
-</div>
-
-<main class="grid">
-  <section class="card" aria-label="Simulação">
-    <div class="stats">
-      <div><span class="v" id="sEp">1</span><span class="k">Episódio</span></div>
-      <div><span class="v" id="sAlive">0</span><span class="k">Vivos</span></div>
-      <div><span class="v" id="sDist">0</span><span class="k">Distância</span></div>
-      <div><span class="v" id="sBest">0</span><span class="k">Recorde</span></div>
-      <div><span class="v" id="sStates">0</span><span class="k">Estados na tabela</span></div>
-      <div><span class="v" id="sEps">0</span><span class="k">ε atual</span></div>
-    </div>
-    <canvas id="game" aria-label="Jogo do dinossauro"></canvas>
-    <canvas id="chart" aria-label="Gráfico de evolução"></canvas>
-  </section>
-
-  <aside class="card panel" aria-label="Controles">
-    <h2>Simulação</h2>
-    <div class="row">
-      <label for="speed">Velocidade</label>
-      <input type="range" id="speed" min="0" max="12" step="1" value="4">
-      <span class="speedval" id="speedVal">×5</span>
-    </div>
-    <p class="hint">Teclas: ↑ e ↓ mudam a velocidade, espaço pausa, D liga/desliga o desenho.</p>
-    <div class="btns">
-      <button id="btnPause" class="primary">Pausar</button>
-      <button id="btnNew">Novo episódio</button>
-    </div>
-    <div class="row">
-      <label for="nDinos">Dinossauros</label>
-      <input type="number" id="nDinos" min="1" max="300" step="1" value="30">
-    </div>
-    <p class="hint">A mudança vale a partir do próximo episódio. O dinossauro nº 1 (com contorno) sempre joga sem exploração.</p>
-    <div class="row"><label for="pCap">Limite de distância por episódio</label><input type="number" id="pCap" min="0" step="100000"></div>
-    <p class="hint">0 = sem limite: o episódio só termina quando todos morrem. Nesse caso o recorde sobe em tempo real.</p>
-    <label class="check"><input type="checkbox" id="chkDraw" checked> <span>Desenhar na tela (desligar acelera o treino)</span></label>
-
-    <h2>Aprendizado</h2>
-    <label class="check"><input type="checkbox" id="chkLearn" checked> <span>Treinar (desligado, só executa o que já aprendeu)</span></label>
-    <label class="check"><input type="checkbox" id="chkPlane"> <span>Modo avião: inclui espinhos longos e a ação de voar</span></label>
-    <div class="row"><label for="pAlpha">Taxa de aprendizado (α)</label><input type="number" id="pAlpha" min="0.001" max="1" step="0.01"></div>
-    <div class="row"><label for="pGamma">Desconto (γ)</label><input type="number" id="pGamma" min="0" max="0.999" step="0.01"></div>
-    <div class="row"><label for="pEps">Exploração atual (ε)</label><input type="number" id="pEps" min="0" max="1" step="0.01"></div>
-    <div class="row"><label for="pEpsMin">Exploração mínima</label><input type="number" id="pEpsMin" min="0" max="1" step="0.01"></div>
-    <div class="row"><label for="pDecay">Decaimento por episódio</label><input type="number" id="pDecay" min="0.5" max="1" step="0.005"></div>
-
-    <h2>Dados</h2>
-    <div class="btns">
-      <button id="btnExport" class="primary">Exportar aprendizado</button>
-      <button id="btnImport">Importar arquivo…</button>
-      <input type="file" id="fileIn" accept="application/json,.json" hidden>
-    </div>
-    <div class="radios" role="radiogroup" aria-label="Modo de importação">
-      <label><input type="radio" name="impMode" value="replace" checked> Substituir</label>
-      <label><input type="radio" name="impMode" value="merge"> Mesclar com o atual</label>
-    </div>
-    <p class="hint">O arquivo guarda a tabela Q, os parâmetros e o histórico de episódios.</p>
-    <div class="btns"><button id="btnReset" class="danger">Zerar aprendizado</button></div>
-    <p id="status" role="status" aria-live="polite"></p>
-  </aside>
-</main>
-
-<!-- ============================ MOTOR (sem DOM) ============================ -->
-<script id="engine">
 const DinoEngine = (() => {
   'use strict';
 
@@ -171,6 +34,9 @@ const DinoEngine = (() => {
       this.learn = o.learn !== false;
       this.numDinos = o.numDinos ?? 30;
       this.capDistance = o.capDistance ?? 0;       // 0 = sem limite de distância por episódio
+      this.playerMode = false;
+      this.playerJumpQueued = false;
+      this.playerDuck = false;
       this.q = new Map();                          // estado -> [q0, q1, q2, q3, visitas]
       this.episode = 0;
       this.bestEver = 0;
@@ -188,6 +54,8 @@ const DinoEngine = (() => {
       this.nextId = 0;
       this.spikeCount = 0;
       this.ended = false;
+      this.playerJumpQueued = false;
+      this.playerDuck = false;
       this.spawn(true);
       while (this.obstacles[this.obstacles.length - 1].x < W + 800) this.spawn(false);
       this.dinos = [];
@@ -340,7 +208,19 @@ const DinoEngine = (() => {
         if (hit(d.x + 7, d.y + 5, dw(d) - 14, dh(d) - 10, o.x, o.y, o.w, o.h)) { this.die(d); continue; }
 
         if (this.learn) d.acc += (d.estado === 0 || d.estado === 1 ? 1 : 0.6) / DECISION;
-        if (decide) this.decide(d);
+
+        if (this.playerMode && d.id === 0) {
+          // No modo manual, o jogador controla o primeiro dinossauro.
+          if (this.playerJumpQueued && d.y <= GROUND + 0.001) {
+            d.action = 1;
+            this.playerJumpQueued = false;
+          } else {
+            d.action = this.playerDuck ? 2 : 0;
+          }
+        } else if (decide) {
+          this.decide(d);
+        }
+
         this.applyAction(d, d.action);
       }
 
@@ -440,10 +320,7 @@ const DinoEngine = (() => {
   return { Sim, TICK_HZ, W, GROUND, DECISION };
 })();
 if (typeof module !== 'undefined') module.exports = DinoEngine;
-</script>
 
-<!-- ============================ INTERFACE ============================ -->
-<script id="ui">
 (() => {
   if (typeof document === 'undefined') return;
   const { Sim, TICK_HZ, W, GROUND } = DinoEngine;
@@ -582,6 +459,8 @@ if (typeof module !== 'undefined') module.exports = DinoEngine;
     $('sDist').textContent = fmt(sim.dist);
     $('sBest').textContent = fmt(Math.max(sim.bestEver, sim.dist));
     $('sStates').textContent = fmt(sim.q.size);
+    const totalDistance = sim.dinos.reduce((sum, d) => sum + (d.alive ? sim.dist : d.dist), 0);
+    $('sAvg').textContent = fmt(sim.dinos.length ? totalDistance / sim.dinos.length : 0);
     $('sEps').textContent = sim.learn ? sim.epsilon.toFixed(3) : '0';
     const f = $('pEps'); if (document.activeElement !== f) f.value = sim.epsilon.toFixed(3);
   }
@@ -598,6 +477,210 @@ if (typeof module !== 'undefined') module.exports = DinoEngine;
     acc = 0;
   }
   function setPaused(p) { paused = p; $('btnPause').textContent = p ? 'Continuar' : 'Pausar'; }
+
+  /* ---------- exportação Excel com gráfico incorporado ---------- */
+  const excelXmlEscape = value => String(value ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+
+  const excelColumn = n => {
+    let out = '';
+    while (n > 0) { const r = (n - 1) % 26; out = String.fromCharCode(65 + r) + out; n = Math.floor((n - 1) / 26); }
+    return out;
+  };
+
+  function excelCellText(ref, value, style = 0) {
+    return `<c r="${ref}" t="inlineStr" s="${style}"><is><t xml:space="preserve">${excelXmlEscape(value)}</t></is></c>`;
+  }
+  function excelCellNumber(ref, value, style = 4) {
+    const n = Number.isFinite(Number(value)) ? Number(value) : 0;
+    return `<c r="${ref}" s="${style}"><v>${n}</v></c>`;
+  }
+
+  // ZIP sem compressão: o formato XLSX continua sendo um pacote ZIP válido e não depende de bibliotecas externas.
+  const excelCrcTable = (() => {
+    const table = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      table[n] = c >>> 0;
+    }
+    return table;
+  })();
+
+  function excelCrc32(bytes) {
+    let crc = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; i++) crc = excelCrcTable[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+  }
+
+  function excelZip(files) {
+    const encoder = new TextEncoder();
+    const localParts = [], centralParts = [];
+    const now = new Date();
+    const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | Math.floor(now.getSeconds() / 2);
+    const dosDate = ((Math.max(1980, now.getFullYear()) - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+    let offset = 0;
+
+    const header = size => new Uint8Array(size);
+    const set16 = (view, at, value) => view.setUint16(at, value, true);
+    const set32 = (view, at, value) => view.setUint32(at, value >>> 0, true);
+
+    for (const [path, content] of Object.entries(files)) {
+      const name = encoder.encode(path);
+      const data = encoder.encode(content);
+      const crc = excelCrc32(data);
+      const local = header(30), lv = new DataView(local.buffer);
+      set32(lv, 0, 0x04034b50); set16(lv, 4, 20); set16(lv, 6, 0x0800);
+      set16(lv, 8, 0); set16(lv, 10, dosTime); set16(lv, 12, dosDate);
+      set32(lv, 14, crc); set32(lv, 18, data.length); set32(lv, 22, data.length);
+      set16(lv, 26, name.length); set16(lv, 28, 0);
+      localParts.push(local, name, data);
+
+      const central = header(46), cv = new DataView(central.buffer);
+      set32(cv, 0, 0x02014b50); set16(cv, 4, 20); set16(cv, 6, 20);
+      set16(cv, 8, 0x0800); set16(cv, 10, 0); set16(cv, 12, dosTime); set16(cv, 14, dosDate);
+      set32(cv, 16, crc); set32(cv, 20, data.length); set32(cv, 24, data.length);
+      set16(cv, 28, name.length); set16(cv, 30, 0); set16(cv, 32, 0);
+      set16(cv, 34, 0); set16(cv, 36, 0); set32(cv, 38, 0); set32(cv, 42, offset);
+      centralParts.push(central, name);
+      offset += local.length + name.length + data.length;
+    }
+
+    const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0);
+    const end = header(22), ev = new DataView(end.buffer);
+    set32(ev, 0, 0x06054b50); set16(ev, 4, 0); set16(ev, 6, 0);
+    set16(ev, 8, Object.keys(files).length); set16(ev, 10, Object.keys(files).length);
+    set32(ev, 12, centralSize); set32(ev, 16, offset); set16(ev, 20, 0);
+
+    return new Blob([...localParts, ...centralParts, end], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    });
+  }
+
+  function buildExcelReport() {
+    const history = sim.history.map((item, index) => ({
+      episode: Math.max(1, sim.episode - sim.history.length + index + 1),
+      best: Number(item.best) || 0,
+      avg: Number(item.avg) || 0,
+      status: 'Concluído'
+    }));
+
+    // Inclui um retrato do episódio atual para permitir exportação antes do fim da partida.
+    const distances = sim.dinos.map(d => d.alive ? sim.dist : d.dist);
+    const currentBest = distances.length ? Math.max(...distances) : 0;
+    const currentAverage = distances.length
+      ? distances.reduce((sum, value) => sum + value, 0) / distances.length : 0;
+    history.push({
+      episode: sim.episode + 1,
+      best: currentBest,
+      avg: currentAverage,
+      status: 'Em andamento'
+    });
+
+    const firstDataRow = 8;
+    const lastDataRow = firstDataRow + history.length - 1;
+    const averageOfAverages = history.length
+      ? history.reduce((sum, row) => sum + row.avg, 0) / history.length : 0;
+    const maxDistance = history.reduce((max, row) => Math.max(max, row.best), 0);
+    const modeName = sim.playerMode ? 'Jogador' : 'Inteligência artificial';
+
+    const rows = [];
+    rows.push(`<row r="1" ht="32" customHeight="1">${excelCellText('A1', 'Dino Q-Learning — Relatório de desempenho', 1)}</row>`);
+    rows.push(`<row r="2" ht="22" customHeight="1">${excelCellText('A2', 'Histórico por episódio | Gerado em ' + new Date().toLocaleString('pt-BR'), 2)}</row>`);
+    rows.push(`<row r="4">${excelCellText('A4', 'Episódios concluídos', 5)}${excelCellNumber('B4', sim.history.length, 6)}${excelCellText('C4', 'Recorde geral', 5)}${excelCellNumber('D4', Math.max(Number(sim.bestEver) || 0, maxDistance), 6)}</row>`);
+    rows.push(`<row r="5">${excelCellText('A5', 'Média das médias', 5)}${excelCellNumber('B5', averageOfAverages, 6)}${excelCellText('C5', 'Modo exportado', 5)}${excelCellText('D5', modeName, 7)}</row>`);
+    rows.push(`<row r="7" ht="28" customHeight="1">${excelCellText('A7', 'Episódio', 3)}${excelCellText('B7', 'Melhor distância', 3)}${excelCellText('C7', 'Distância média', 3)}${excelCellText('D7', 'Status', 3)}</row>`);
+
+    history.forEach((item, index) => {
+      const row = firstDataRow + index;
+      rows.push(`<row r="${row}">${excelCellText('A' + row, 'Episódio ' + item.episode, 0)}${excelCellNumber('B' + row, item.best)}${excelCellNumber('C' + row, item.avg)}${excelCellText('D' + row, item.status, 0)}</row>`);
+    });
+
+    const chartSeries = (index, titleCell, title, column, color) => {
+      const points = history.map((item, i) => `<c:pt idx="${i}"><c:v>${excelXmlEscape(item[column])}</c:v></c:pt>`).join('');
+      const categoryPoints = history.map((item, i) => `<c:pt idx="${i}"><c:v>${excelXmlEscape('Episódio ' + item.episode)}</c:v></c:pt>`).join('');
+      return `<c:ser>
+        <c:idx val="${index}"/><c:order val="${index}"/>
+        <c:tx><c:strRef><c:f>'Desempenho'!$${titleCell}$7</c:f><c:strCache><c:ptCount val="1"/><c:pt idx="0"><c:v>${excelXmlEscape(title)}</c:v></c:pt></c:strCache></c:strRef></c:tx>
+        <c:spPr><a:ln w="28575"><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:prstDash val="solid"/></a:ln></c:spPr>
+        <c:marker><c:symbol val="circle"/><c:size val="5"/><c:spPr><a:solidFill><a:srgbClr val="${color}"/></a:solidFill></c:spPr></c:marker>
+        <c:cat><c:strRef><c:f>'Desempenho'!$A$${firstDataRow}:$A$${lastDataRow}</c:f><c:strCache><c:ptCount val="${history.length}"/>${categoryPoints}</c:strCache></c:strRef></c:cat>
+        <c:val><c:numRef><c:f>'Desempenho'!$${column === 'best' ? 'B' : 'C'}$${firstDataRow}:$${column === 'best' ? 'B' : 'C'}$${lastDataRow}</c:f><c:numCache><c:formatCode>0.00</c:formatCode><c:ptCount val="${history.length}"/>${points}</c:numCache></c:numRef></c:val>
+        <c:smooth val="0"/>
+      </c:ser>`;
+    };
+
+    const skipLabels = Math.max(1, Math.ceil(history.length / 18));
+    const chartXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+      <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <c:date1904 val="0"/><c:lang val="pt-BR"/><c:roundedCorners val="1"/>
+        <c:chart>
+          <c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr lang="pt-BR" sz="1500" b="1"/></a:pPr><a:r><a:rPr lang="pt-BR" sz="1500" b="1"/><a:t>Evolução do desempenho por episódio</a:t></a:r><a:endParaRPr lang="pt-BR"/></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>
+          <c:autoTitleDeleted val="0"/><c:plotArea><c:layout/><c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>
+            ${chartSeries(0, 'B', 'Melhor distância', 'best', '1F4FD8')}
+            ${chartSeries(1, 'C', 'Distância média', 'avg', '8993A4')}
+            <c:dropLines/><c:hiLowLines/><c:upDownBars/><c:marker val="1"/><c:smooth val="0"/><c:axId val="123456"/><c:axId val="123457"/>
+          </c:lineChart>
+          <c:catAx><c:axId val="123456"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="123457"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/><c:tickLblSkip val="${skipLabels}"/></c:catAx>
+          <c:valAx><c:axId val="123457"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="l"/><c:majorGridlines><c:spPr><a:ln w="9525"><a:solidFill><a:srgbClr val="D9E1F2"/></a:solidFill></a:ln></c:spPr></c:majorGridlines><c:numFmt formatCode="#,##0" sourceLinked="1"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="123456"/><c:crosses val="autoZero"/><c:crossBetween val="between"/></c:valAx>
+          </c:plotArea><c:legend><c:legendPos val="b"/><c:overlay val="0"/></c:legend><c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/><c:showDLblsOverMax val="0"/>
+        </c:chart><c:printSettings><c:headerFooter/><c:pageMargins b="0.75" l="0.7" r="0.7" t="0.75" header="0.3" footer="0.3"/><c:pageSetup/></c:printSettings>
+      </c:chartSpace>`;
+
+    const sheetRows = rows.join('');
+    const sheetXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+      <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+        <dimension ref="A1:D${lastDataRow}"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="7" topLeftCell="A8" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A8" sqref="A8"/></sheetView></sheetViews>
+        <sheetFormatPr defaultRowHeight="18"/><cols><col min="1" max="1" width="25" customWidth="1"/><col min="2" max="3" width="22" customWidth="1"/><col min="4" max="4" width="18" customWidth="1"/></cols>
+        <sheetData>${sheetRows}</sheetData><autoFilter ref="A7:D${lastDataRow}"/><mergeCells count="2"><mergeCell ref="A1:D1"/><mergeCell ref="A2:D2"/></mergeCells><drawing r:id="rId1"/>
+      </worksheet>`;
+
+    const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+      <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+        <numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0.00"/></numFmts>
+        <fonts count="5"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="18"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font><font><sz val="10"/><i/><color rgb="FF5D6673"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FF1F2937"/><name val="Calibri"/></font></fonts>
+        <fills count="5"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF1F3B70"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FF1F4FD8"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFEAF0FF"/><bgColor indexed="64"/></patternFill></fill></fills>
+        <borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left/><right/><top/><bottom style="thin"><color rgb="FFD9E1F2"/></bottom><diagonal/></border></borders>
+        <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+        <cellXfs count="8"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="center"/></xf><xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="3" fillId="3" borderId="1" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="4" fillId="4" borderId="1" xfId="0"/><xf numFmtId="164" fontId="4" fillId="4" borderId="1" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="4" fillId="0" borderId="1" xfId="0"/></cellXfs>
+        <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+      </styleSheet>`;
+
+    const workbookXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><fileVersion appName="xl"/><workbookPr/><bookViews><workbookView/></bookViews><sheets><sheet name="Desempenho" sheetId="1" r:id="rId1"/></sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`;
+    const drawingXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><xdr:twoCellAnchor editAs="oneCell"><xdr:from><xdr:col>5</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>2</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>14</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>22</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to><xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="2" name="Gráfico de desempenho"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId1"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor></xdr:wsDr>`;
+
+    return {
+      '[Content_Types].xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/><Override PartName="/xl/charts/chart1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`,
+      '_rels/.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>`,
+      'docProps/core.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>Dino Q-Learning — Relatório de desempenho</dc:title><dc:creator>Dino Q-Learning</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">${new Date().toISOString()}</dcterms:created></cp:coreProperties>`,
+      'docProps/app.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><Application>Dino Q-Learning</Application><HeadingPairs><vt:vector size="2" baseType="variant"><vt:variant><vt:lpstr>Worksheets</vt:lpstr></vt:variant><vt:variant><vt:i4>1</vt:i4></vt:variant></vt:vector></HeadingPairs><TitlesOfParts><vt:vector size="1" baseType="lpstr"><vt:lpstr>Desempenho</vt:lpstr></vt:vector></TitlesOfParts></Properties>`,
+      'xl/workbook.xml': workbookXml,
+      'xl/_rels/workbook.xml.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
+      'xl/styles.xml': stylesXml,
+      'xl/worksheets/sheet1.xml': sheetXml,
+      'xl/worksheets/_rels/sheet1.xml.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>`,
+      'xl/drawings/drawing1.xml': drawingXml,
+      'xl/drawings/_rels/drawing1.xml.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart1.xml"/></Relationships>`,
+      'xl/charts/chart1.xml': chartXml
+    };
+  }
+
+  function exportExcelReport() {
+    try {
+      const file = excelZip(buildExcelReport());
+      const url = URL.createObjectURL(file);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'dino-qlearning_desempenho_' + new Date().toISOString().slice(0, 10) + '.xlsx';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      setStatus('Relatório Excel exportado com dados e gráfico de melhor distância x média.');
+    } catch (err) {
+      console.error('Falha ao exportar Excel:', err);
+      setStatus('Não foi possível gerar o Excel: ' + (err.message || 'erro inesperado.'), true);
+    }
+  }
 
   const numInput = (id, key, lo, hi) => $(id).addEventListener('input', e => {
     const v = parseFloat(e.target.value);
@@ -631,6 +714,7 @@ if (typeof module !== 'undefined') module.exports = DinoEngine;
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     setStatus('Exportado: ' + fmt(Object.keys(data.qtable).length) + ' estados, ' + fmt(sim.episode) + ' episódios.');
   });
+  $('btnExportExcel').addEventListener('click', exportExcelReport);
   $('btnImport').addEventListener('click', () => $('fileIn').click());
   $('fileIn').addEventListener('change', e => {
     const file = e.target.files[0]; e.target.value = '';
@@ -656,11 +740,100 @@ if (typeof module !== 'undefined') module.exports = DinoEngine;
   window.addEventListener('keydown', e => {
     const t = e.target.tagName;
     if (t === 'INPUT' || t === 'SELECT' || t === 'TEXTAREA' || e.ctrlKey || e.metaKey || e.altKey) return;
+
+    if (sim.playerMode) {
+      if (e.code === 'Space' || e.key === 'ArrowUp') {
+        if (!e.repeat) sim.playerJumpQueued = true;
+        e.preventDefault();
+      } else if (e.key === 'ArrowDown') {
+        sim.playerDuck = true;
+        e.preventDefault();
+      } else if (e.key === 'Escape') {
+        setPaused(!paused);
+      }
+      return;
+    }
+
     if (e.key === 'ArrowUp') { setSpeed(speedIdx + 1); e.preventDefault(); }
     else if (e.key === 'ArrowDown') { setSpeed(speedIdx - 1); e.preventDefault(); }
     else if (e.key === ' ') { if (t !== 'BUTTON') { setPaused(!paused); e.preventDefault(); } }
     else if (e.key === 'd' || e.key === 'D') { $('chkDraw').click(); }
   });
+
+  window.addEventListener('keyup', e => {
+    if (sim.playerMode && e.key === 'ArrowDown') {
+      sim.playerDuck = false;
+      e.preventDefault();
+    }
+  });
+
+  /* ---------- modo de jogo ---------- */
+  let savedAIConfig = null;
+
+  function setGameMode(mode) {
+    if (mode === 'player') {
+      if (!sim.playerMode) {
+        savedAIConfig = {
+          numDinos: sim.numDinos,
+          learn: sim.learn,
+          planeMode: sim.planeMode
+        };
+      }
+      sim.playerMode = true;
+      sim.numDinos = 1;
+      sim.learn = false;
+      sim.planeMode = false;
+      $('nDinos').disabled = true;
+      $('chkLearn').checked = false;
+      $('chkLearn').disabled = true;
+      $('chkPlane').checked = false;
+      $('chkPlane').disabled = true;
+      $('playerControls').hidden = false;
+      setStatus('Modo jogador ativado. Use Espaço/↑ para pular e ↓ para abaixar.');
+    } else {
+      sim.playerMode = false;
+      if (savedAIConfig) {
+        sim.numDinos = savedAIConfig.numDinos;
+        sim.learn = savedAIConfig.learn;
+        sim.planeMode = savedAIConfig.planeMode;
+      }
+      savedAIConfig = null;
+      $('nDinos').disabled = false;
+      $('chkLearn').disabled = false;
+      $('chkPlane').disabled = false;
+      $('playerControls').hidden = true;
+      setStatus('Modo IA ativado. Os dinossauros voltaram a treinar.');
+    }
+    sim.newEpisode();
+    syncInputs();
+    $('mode').value = mode;
+    $('speedHint').textContent = mode === 'player'
+      ? 'Teclado: Espaço/↑ pula, ↓ abaixa e Esc pausa. Também dá para usar os botões acima.'
+      : 'Teclas: ↑ e ↓ mudam a velocidade, espaço pausa, D liga/desliga o desenho.';
+    $('chkLearn').disabled = mode === 'player';
+    $('chkPlane').disabled = mode === 'player';
+    $('nDinos').disabled = mode === 'player';
+    lastEpisode = -1;
+  }
+
+  $('mode').addEventListener('change', e => setGameMode(e.target.value));
+  $('btnJump').addEventListener('click', () => { if (sim.playerMode) sim.playerJumpQueued = true; });
+
+  const duckButton = $('btnDuck');
+  const startDuck = e => {
+    if (!sim.playerMode) return;
+    sim.playerDuck = true;
+    if (e && e.cancelable) e.preventDefault();
+  };
+  const stopDuck = e => {
+    sim.playerDuck = false;
+    if (e && e.cancelable) e.preventDefault();
+  };
+  duckButton.addEventListener('pointerdown', startDuck);
+  duckButton.addEventListener('pointerup', stopDuck);
+  duckButton.addEventListener('pointerleave', stopDuck);
+  duckButton.addEventListener('pointercancel', stopDuck);
+  duckButton.addEventListener('lostpointercapture', stopDuck);
 
   /* ---------- laço principal ---------- */
   function frame(ts) {
@@ -688,6 +861,3 @@ if (typeof module !== 'undefined') module.exports = DinoEngine;
   syncInputs(); setSpeed(speedIdx); updateStats(); drawChart();
   requestAnimationFrame(frame);
 })();
-</script>
-</body>
-</html>
