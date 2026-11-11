@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dino Q-Learning</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="head">
+    <h1>Dino Q-Learning</h1>
+    <p class="sub">Vários dinossauros aprendem em uma única tabela Q. Sem rede neural.</p>
+  </div>
+
+  <main class="grid">
+    <section class="card" aria-label="Simulação">
+      <div class="stats">
+        <div><span class="v" id="sEp">1</span><span class="k">Episódio</span></div>
+        <div><span class="v" id="sAlive">0</span><span class="k">Vivos</span></div>
+        <div><span class="v" id="sDist">0</span><span class="k">Distância</span></div>
+        <div><span class="v" id="sAvg">0</span><span class="k">Média</span></div>
+        <div><span class="v" id="sBest">0</span><span class="k">Recorde</span></div>
+        <div><span class="v" id="sStates">0</span><span class="k">Estados na tabela</span></div>
+        <div><span class="v" id="sEps">0</span><span class="k">ε atual</span></div>
+      </div>
+      <canvas id="game" aria-label="Jogo do dinossauro"></canvas>
+      <canvas id="chart" aria-label="Gráfico de evolução"></canvas>
+    </section>
+
+    <aside class="card panel" aria-label="Controles">
+      <h2>Modo de jogo</h2>
+      <div class="row">
+        <label for="mode">Quem vai jogar?</label>
+        <select id="mode">
+          <option value="ai">Inteligência artificial</option>
+          <option value="player">Eu (jogador)</option>
+        </select>
+      </div>
+      <div id="playerControls" hidden>
+        <strong>Seus controles</strong>
+        <div class="btns">
+          <button id="btnJump" type="button">Pular</button>
+          <button id="btnDuck" type="button">Abaixar</button>
+        </div>
+        <p class="player-hint">Teclado: Espaço ou ↑ para pular; segure ↓ para abaixar. Esc pausa a partida.</p>
+      </div>
+
+      <h2>Simulação</h2>
+      <div class="row">
+        <label for="speed">Velocidade</label>
+        <input type="range" id="speed" min="0" max="12" step="1" value="4">
+        <span class="speedval" id="speedVal">×5</span>
+      </div>
+      <p class="hint" id="speedHint">Teclas: ↑ e ↓ mudam a velocidade, espaço pausa, D liga/desliga o desenho.</p>
+      <div class="btns">
+        <button id="btnPause" class="primary">Pausar</button>
+        <button id="btnNew">Novo episódio</button>
+      </div>
+      <div class="row">
+        <label for="nDinos">Dinossauros</label>
+        <input type="number" id="nDinos" min="1" max="300" step="1" value="30">
+      </div>
+      <p class="hint">A mudança vale a partir do próximo episódio. O dinossauro nº 1 (com contorno) sempre joga sem exploração.</p>
+      <div class="row"><label for="pCap">Limite de distância por episódio</label><input type="number" id="pCap" min="0" step="100000"></div>
+      <p class="hint">0 = sem limite: o episódio só termina quando todos morrem.</p>
+      <label class="check"><input type="checkbox" id="chkDraw" checked> <span>Desenhar na tela (desligar acelera o treino)</span></label>
+
+      <h2>Aprendizado</h2>
+      <label class="check"><input type="checkbox" id="chkLearn" checked> <span>Treinar (desligado, só executa o que já aprendeu)</span></label>
+      <label class="check"><input type="checkbox" id="chkPlane"> <span>Modo avião: inclui espinhos longos e a ação de voar</span></label>
+      <div class="row"><label for="pAlpha">Taxa de aprendizado (α)</label><input type="number" id="pAlpha" min="0.001" max="1" step="0.01"></div>
+      <div class="row"><label for="pGamma">Desconto (γ)</label><input type="number" id="pGamma" min="0" max="0.999" step="0.01"></div>
+      <div class="row"><label for="pEps">Exploração atual (ε)</label><input type="number" id="pEps" min="0" max="1" step="0.01"></div>
+      <div class="row"><label for="pEpsMin">Exploração mínima</label><input type="number" id="pEpsMin" min="0" max="1" step="0.01"></div>
+      <div class="row"><label for="pDecay">Decaimento por episódio</label><input type="number" id="pDecay" min="0.5" max="1" step="0.005"></div>
+
+      <h2>Dados</h2>
+      <div class="btns">
+        <button id="btnExport" class="primary">Exportar aprendizado (JSON)</button>
+        <button id="btnImport">Importar arquivo…</button>
+        <input type="file" id="fileIn" accept="application/json,.json" hidden>
+      </div>
+      <div class="btns">
+        <button id="btnExportExcel" class="excel-button" type="button">Exportar gráfico para Excel (.xlsx)</button>
+      </div>
+      <p class="hint">O Excel inclui o histórico, a melhor distância, a média por episódio e um gráfico de linhas pronto para editar.</p>
+      <div class="radios" role="radiogroup" aria-label="Modo de importação">
+        <label><input type="radio" name="impMode" value="replace" checked> Substituir</label>
+        <label><input type="radio" name="impMode" value="merge"> Mesclar com o atual</label>
+      </div>
+      <p class="hint">O arquivo guarda a tabela Q, os parâmetros e o histórico de episódios.</p>
+      <div class="btns"><button id="btnReset" class="danger">Zerar aprendizado</button></div>
+      <p id="status" role="status" aria-live="polite"></p>
+    </aside>
+  </main>
+  <script src="script.js"></script>
+</body>
+</html>
