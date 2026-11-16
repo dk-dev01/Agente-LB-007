@@ -10,12 +10,23 @@ const DinoEngine = (() => {
   const TTC_STEP = 8, TTC_N = 29, NCLASS = 9, NV = 23;
   const MAX_KEY = TTC_N * NCLASS * NV * 2;
   const FORMAT = 'dino-qlearning';
+  const REPLAY_FORMAT = 'dino-qlearning-replay';
 
   const hit = (x1, y1, w1, h1, x2, y2, w2, h2) =>
     !(x1 + w1 <= x2 || x1 >= x2 + w2 || y1 + h1 <= y2 || y1 >= y2 + h2);
   const dw = d => d.estado === 1 ? 55 : d.estado === 4 ? 39 : 40;
   const dh = d => d.estado === 1 ? 25 : d.estado === 4 ? 37 : 43;
   const r4 = v => Math.round(v * 10000) / 10000;
+
+  function mulberry32(seed) {
+    let a = seed >>> 0;
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      let t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
 
   function obsClass(o) {
     if (o.type < 5) return o.type;                 // cactos
@@ -34,20 +45,58 @@ const DinoEngine = (() => {
       this.learn = o.learn !== false;
       this.numDinos = o.numDinos ?? 30;
       this.capDistance = o.capDistance ?? 0;       // 0 = sem limite de distância por episódio
+      this.progressiveDifficulty = !!o.progressiveDifficulty;
+      this.progressiveEpisodes = Math.max(0, Number(o.progressiveEpisodes) || 0);
+      this.difficultyLevel = 0;
+      this.seed = Number.isFinite(o.seed) ? (o.seed >>> 0) : null;
+      this.worldRandom = this.seed === null ? Math.random : mulberry32(this.seed);
+      this.policyRandom = this.seed === null ? Math.random : mulberry32((this.seed ^ 0x9E3779B9) >>> 0);
+      this.agentMode = o.agentMode || 'q';          // q | random (usado nos benchmarks)
+      this.replayRecord = o.replayRecord || null;
+      this.recordReplay = o.recordReplay !== false && !this.replayRecord;
+      if (this.replayRecord) {
+        this.numDinos = Math.max(1, Math.min(300, Number(this.replayRecord.population) || 1));
+        this.planeMode = !!this.replayRecord.planeMode;
+        this.progressiveDifficulty = !!this.replayRecord.progressiveDifficulty;
+        this.progressiveEpisodes = Math.max(0, Number(this.replayRecord.progressiveEpisodes) || 0);
+        this.capDistance = Math.max(0, Number(this.replayRecord.capDistance) || 0);
+        this.learn = false;
+      }
+      this.replayActionIndex = 0;
+      this.replayObstacleIndex = 0;
+      this.replayCapEventIndex = 0;
+      this.replayFinished = false;
       this.playerMode = false;
       this.playerJumpQueued = false;
       this.playerDuck = false;
+      this.actionCounts = { wait: 0, jump: 0, duck: 0, fly: 0 };
+      this.lastEpisodeResult = null;
+      this.onEpisodeEnd = null;
       this.q = new Map();                          // estado -> [q0, q1, q2, q3, visitas]
       this.episode = 0;
+      this.trainingEpisodes = 0;
       this.bestEver = 0;
-      this.history = [];                           // { best, avg } por episódio
+      this.history = [];                           // { best, avg } somente dos episódios da IA
       this.totalSteps = 0;
       this.newEpisode();
     }
 
     /* ---------- episódio ---------- */
     newEpisode() {
-      this.V = -3;
+      this.difficultyLevel = this.replayRecord
+        ? Math.max(0, Number(this.replayRecord.difficultyLevel) || 0)
+        : (this.progressiveDifficulty ? Math.min(12, Math.floor(this.progressiveEpisodes / 5)) : 0);
+      this.V = this.replayRecord
+        ? -Math.max(0.1, Number(this.replayRecord.initialSpeed) || 3)
+        : -(3 + this.difficultyLevel * 0.22);
+      this.episodeInitialSpeed = Math.abs(this.V);
+      this.episodeInitialCapDistance = this.capDistance;
+      this.episodeCapDistanceEvents = [];
+      this.episodeObstaclePlan = [];
+      this.replayObstacleIndex = 0;
+      this.replayCapEventIndex = 0;
+      this.replayActionIndex = 0;
+      this.replayFinished = false;
       this.dist = 0;
       this.tick = 0;
       this.obstacles = [];
@@ -60,29 +109,50 @@ const DinoEngine = (() => {
       while (this.obstacles[this.obstacles.length - 1].x < W + 800) this.spawn(false);
       this.dinos = [];
       for (let i = 0; i < this.numDinos; i++) {
+        const savedX = this.replayRecord?.dinoStartXs?.[i];
+        const startX = Number.isFinite(savedX) ? savedX : 100 + this.worldRandom() * 80;
         this.dinos.push({
-          id: i, x: 100 + Math.random() * 80, y: GROUND, vy: 0, estado: 0,
+          id: i, x: startX, startX, y: GROUND, vy: 0, estado: 0,
           cool: 0, desl: 0, alive: true, dist: 0,
-          ps: -1, pa: 0, acc: 0, action: 0
+          ps: -1, pa: 0, acc: 0, action: 0,
+          actionHistory: this.recordReplay ? [] : null
         });
       }
-      this.alive = this.dinos.length;
+      this.episodeStartXs = this.dinos.map(d => d.startX);
+      if (this.replayRecord) {
+        const targetId = Math.max(0, Math.min(this.dinos.length - 1, Number(this.replayRecord.bestDinoId) || 0));
+        for (const d of this.dinos) d.alive = d.id === targetId;
+        this.replayDinoId = targetId;
+        this.alive = 1;
+      } else {
+        this.replayDinoId = null;
+        this.alive = this.dinos.length;
+      }
     }
 
     spawn(first) {
+      if (this.replayRecord) {
+        const saved = this.replayRecord.obstacles[this.replayObstacleIndex++];
+        if (!saved) throw new Error('Replay inválido: a sequência de obstáculos terminou antes do episódio.');
+        const [x, y, w, h, type] = saved;
+        this.obstacles.push({ id: this.nextId++, x, y, w, h, type });
+        return;
+      }
       const last = this.obstacles[this.obstacles.length - 1];
-      const x = last ? last.x + last.w + 500 + (Math.random() * 200 - 100) : 650;
+      const baseGap = this.progressiveDifficulty ? Math.max(280, 500 - this.difficultyLevel * 18) : 500;
+      const x = last ? last.x + last.w + baseGap + (this.worldRandom() * 200 - 100) : 650;
       let type;
       if (!first && this.planeMode && this.spikeCount >= 10) { type = 6; this.spikeCount = 0; }
       else {
-        type = Math.floor(Math.random() * (first ? 5 : 6));
+        type = Math.floor(this.worldRandom() * (first ? 5 : 6));
         if (this.planeMode) this.spikeCount++;
       }
       let w, h, y = GROUND;
       if (type < 5) { w = CACTI[type][0]; h = CACTI[type][1]; }
-      else if (type === 5) { w = BIRD_W; h = BIRD_H; y = 20 + Math.floor(Math.random() * 65); }
+      else if (type === 5) { w = BIRD_W; h = BIRD_H; y = 20 + Math.floor(this.worldRandom() * 65); }
       else { w = SPIKE_W; h = SPIKE_H; y = SPIKE_Y; }
       this.obstacles.push({ id: this.nextId++, x, y, w, h, type });
+      if (this.recordReplay) this.episodeObstaclePlan.push([x, y, w, h, type]);
     }
 
     nextObstacle(d) {
@@ -139,10 +209,11 @@ const DinoEngine = (() => {
 
     pick(s, d) {
       const nA = this.planeMode ? 4 : 3;
+      if (this.agentMode === 'random') return Math.floor(this.policyRandom() * nA);
       const eps = this.epsFor(d);
-      if (eps > 0 && Math.random() < eps) {
+      if (eps > 0 && this.policyRandom() < eps) {
         const wts = nA === 4 ? [0.5, 0.22, 0.22, 0.06] : [0.5, 0.25, 0.25];
-        let u = Math.random();
+        let u = this.policyRandom();
         for (let i = 0; i < nA; i++) { u -= wts[i]; if (u <= 0) return i; }
         return 0;
       }
@@ -153,10 +224,23 @@ const DinoEngine = (() => {
       return best;
     }
 
+    recordAction(action) {
+      const key = action === 1 ? 'jump' : action === 2 ? 'duck' : action === 3 ? 'fly' : 'wait';
+      this.actionCounts[key]++;
+    }
+
     decide(d) {
       const s = this.stateKey(d);
+      if (this.replayRecord && d.id === this.replayDinoId) {
+        const action = this.replayRecord.actions[this.replayActionIndex++];
+        d.ps = s; d.pa = Number.isInteger(action) ? action : 0;
+        d.acc = 0; d.action = d.pa;
+        return;
+      }
       if (this.learn && d.ps !== -1) this.update(d.ps, d.pa, d.acc, s, false);
       d.ps = s; d.pa = this.pick(s, d); d.acc = 0; d.action = d.pa;
+      this.recordAction(d.action);
+      if (this.recordReplay && d.actionHistory) d.actionHistory.push(d.action);
     }
 
     die(d) {
@@ -189,6 +273,14 @@ const DinoEngine = (() => {
     }
 
     step() {
+      if (this.ended) return;
+      if (this.replayRecord) {
+        const events = this.replayRecord.capDistanceEvents || [];
+        while (this.replayCapEventIndex < events.length && events[this.replayCapEventIndex][0] <= this.tick) {
+          this.capDistance = events[this.replayCapEventIndex][1];
+          this.replayCapEventIndex++;
+        }
+      }
       const V = this.V;
       for (const o of this.obstacles) o.x += V;
       while (this.obstacles.length && this.obstacles[0].x + this.obstacles[0].w < -30) this.obstacles.shift();
@@ -210,12 +302,17 @@ const DinoEngine = (() => {
         if (this.learn) d.acc += (d.estado === 0 || d.estado === 1 ? 1 : 0.6) / DECISION;
 
         if (this.playerMode && d.id === 0) {
-          // No modo manual, o jogador controla o primeiro dinossauro.
+          // No modo manual, as estatísticas contam decisões em intervalos iguais aos da IA.
           if (this.playerJumpQueued && d.y <= GROUND + 0.001) {
             d.action = 1;
             this.playerJumpQueued = false;
+            this.recordAction(1);
+          } else if (this.playerDuck) {
+            d.action = 2;
+            if (decide) this.recordAction(2);
           } else {
-            d.action = this.playerDuck ? 2 : 0;
+            d.action = 0;
+            if (decide) this.recordAction(0);
           }
         } else if (decide) {
           this.decide(d);
@@ -224,7 +321,8 @@ const DinoEngine = (() => {
         this.applyAction(d, d.action);
       }
 
-      if (Math.abs(this.V) < 8) this.V -= 0.0005;
+      const speedLimit = this.progressiveDifficulty ? 8 + this.difficultyLevel * 0.12 : 8;
+      if (Math.abs(this.V) < speedLimit) this.V -= 0.0005;
       this.dist += -V;
       this.tick++;
       this.totalSteps++;
@@ -237,10 +335,44 @@ const DinoEngine = (() => {
       let sum = 0;
       for (const d of this.dinos) { if (d.alive) d.dist = this.dist; sum += d.dist; }
       const best = Math.max(...this.dinos.map(d => d.dist));
-      this.history.push({ best: Math.round(best), avg: Math.round(sum / this.dinos.length) });
-      if (this.history.length > 2000) this.history.splice(0, this.history.length - 2000);
-      this.bestEver = Math.max(this.bestEver, best);
+      const avg = sum / this.dinos.length;
+
+      if (this.replayRecord) {
+        this.lastEpisodeResult = { best: Math.round(best), avg: Math.round(avg), episode: this.replayRecord.episode, replay: true };
+        this.ended = true;
+        this.replayFinished = true;
+        return;
+      }
+
+      let replay = null;
+      if (!this.playerMode) {
+        this.history.push({ best: Math.round(best), avg: Math.round(avg) });
+        if (this.history.length > 2000) this.history.splice(0, this.history.length - 2000);
+        this.trainingEpisodes++;
+        this.bestEver = Math.max(this.bestEver, best);
+        if (this.recordReplay) {
+          const champion = this.dinos.reduce((winner, d) => d.dist > winner.dist ? d : winner, this.dinos[0]);
+          replay = {
+            app: REPLAY_FORMAT, version: 1,
+            id: `ep${this.episode + 1}-d${champion.id}-${Date.now()}`,
+            createdAt: new Date().toISOString(),
+            episode: this.episode + 1, distance: Math.round(best),
+            bestDinoId: champion.id, population: this.dinos.length,
+            planeMode: this.planeMode, progressiveDifficulty: this.progressiveDifficulty,
+            progressiveEpisodes: this.progressiveEpisodes, difficultyLevel: this.difficultyLevel,
+            initialSpeed: this.episodeInitialSpeed, capDistance: this.episodeInitialCapDistance,
+            capDistanceEvents: this.episodeCapDistanceEvents.map(item => item.slice()),
+            dinoStartXs: this.episodeStartXs.slice(),
+            obstacles: this.episodeObstaclePlan.map(item => item.slice()),
+            actions: champion.actionHistory ? champion.actionHistory.slice() : [],
+            ticks: this.tick
+          };
+        }
+      }
+      this.lastEpisodeResult = { best: Math.round(best), avg: Math.round(avg), episode: this.episode + 1, actions: { ...this.actionCounts }, replay };
+      if (typeof this.onEpisodeEnd === 'function') this.onEpisodeEnd(this.lastEpisodeResult);
       this.episode++;
+      if (this.progressiveDifficulty) this.progressiveEpisodes++;
       if (this.learn) this.epsilon = Math.max(this.epsilonMin, this.epsilon * this.epsilonDecay);
       this.newEpisode();
     }
@@ -257,11 +389,14 @@ const DinoEngine = (() => {
         config: {
           alpha: this.alpha, gamma: this.gamma, epsilon: r4(this.epsilon),
           epsilonMin: this.epsilonMin, epsilonDecay: this.epsilonDecay,
-          planeMode: this.planeMode, numDinos: this.numDinos, capDistance: this.capDistance
+          planeMode: this.planeMode, learn: this.learn, numDinos: this.numDinos, capDistance: this.capDistance,
+          progressiveDifficulty: this.progressiveDifficulty
         },
         stats: {
-          episode: this.episode, bestEver: Math.round(this.bestEver),
-          totalSteps: this.totalSteps, history: this.history.slice(-1000)
+          episode: this.episode, trainingEpisodes: this.trainingEpisodes, bestEver: Math.round(this.bestEver),
+          totalSteps: this.totalSteps, history: this.history.slice(-1000),
+          actionCounts: { ...this.actionCounts }, difficultyLevel: this.difficultyLevel,
+          progressiveEpisodes: this.progressiveEpisodes
         },
         qtable
       };
@@ -301,18 +436,30 @@ const DinoEngine = (() => {
         this.epsilon = num(c.epsilon, this.epsilon); this.epsilonMin = num(c.epsilonMin, this.epsilonMin);
         this.epsilonDecay = num(c.epsilonDecay, this.epsilonDecay);
         this.planeMode = !!c.planeMode;
+        this.learn = c.learn !== false;
+        this.progressiveDifficulty = !!c.progressiveDifficulty;
+        this.progressiveEpisodes = Math.max(0, Math.round(num(s.progressiveEpisodes, 0)));
+        this.numDinos = Math.min(300, Math.max(1, Math.round(num(c.numDinos, this.numDinos))));
         this.capDistance = num(c.capDistance, this.capDistance);
         this.episode = num(s.episode, 0); this.bestEver = num(s.bestEver, 0);
+        this.actionCounts = { wait: 0, jump: 0, duck: 0, fly: 0 };
+        if (s.actionCounts && typeof s.actionCounts === 'object') {
+          for (const key of ['wait', 'jump', 'duck', 'fly']) this.actionCounts[key] = Math.max(0, Number(s.actionCounts[key]) || 0);
+        }
         this.totalSteps = num(s.totalSteps, 0);
         this.history = Array.isArray(s.history)
           ? s.history.filter(h => h && Number.isFinite(h.best) && Number.isFinite(h.avg)).slice(-2000) : [];
+        this.trainingEpisodes = Math.max(0, Math.round(num(s.trainingEpisodes, this.history.length)));
       }
       this.newEpisode();
       return { states: incoming.size, overlap };
     }
 
     reset() {
-      this.q = new Map(); this.episode = 0; this.bestEver = 0; this.history = []; this.totalSteps = 0;
+      this.q = new Map(); this.episode = 0; this.trainingEpisodes = 0; this.bestEver = 0; this.history = []; this.totalSteps = 0;
+      this.difficultyLevel = 0;
+      this.progressiveEpisodes = 0;
+      this.actionCounts = { wait: 0, jump: 0, duck: 0, fly: 0 };
       this.newEpisode();
     }
   }
@@ -331,13 +478,64 @@ if (typeof module !== 'undefined') module.exports = DinoEngine;
   const $ = id => document.getElementById(id);
 
   const sim = new Sim({ numDinos: 30 });
-  let speedIdx = 4, paused = false, drawOn = true, acc = 0, lastTs = performance.now(), lastEpisode = -1, lastStats = 0;
+  let speedIdx = 4, paused = false, drawOn = true, acc = 0, lastTs = performance.now(), lastEpisode = -1, lastStats = 0, lastReplayUi = 0;
+  const PLAYER_RUNS_KEY = 'dino-qlearning-player-runs-v1';
+  const EXPERIMENTS_KEY = 'dino-qlearning-experiments-v1';
+  const REPLAYS_KEY = 'dino-qlearning-replays-v1';
+  const safeRead = (key, fallback) => {
+    try { const value = JSON.parse(localStorage.getItem(key)); return value ?? fallback; }
+    catch { return fallback; }
+  };
+  const safeWrite = (key, value) => {
+    try { localStorage.setItem(key, JSON.stringify(value)); return true; }
+    catch (error) { console.warn('Não foi possível salvar no navegador:', error); return false; }
+  };
+  let playerRuns = safeRead(PLAYER_RUNS_KEY, []);
+  if (!Array.isArray(playerRuns)) playerRuns = [];
+  let lastBenchmarkHtml = '';
+  let experiments = safeRead(EXPERIMENTS_KEY, []);
+  if (!Array.isArray(experiments)) experiments = [];
+  function isValidReplay(data) {
+    return !!data && data.app === 'dino-qlearning-replay' && data.version === 1
+      && Number.isInteger(data.population) && data.population >= 1 && data.population <= 300
+      && Number.isInteger(data.bestDinoId) && data.bestDinoId >= 0 && data.bestDinoId < data.population
+      && Number.isFinite(data.distance) && Number.isFinite(data.initialSpeed) && data.initialSpeed > 0
+      && Array.isArray(data.dinoStartXs) && data.dinoStartXs.length === data.population
+      && data.dinoStartXs.every(Number.isFinite)
+      && Array.isArray(data.obstacles) && data.obstacles.length >= 2 && data.obstacles.length <= 200000
+      && data.obstacles.every(o => Array.isArray(o) && o.length === 5 && o.every(Number.isFinite))
+      && Array.isArray(data.actions) && data.actions.length > 0 && data.actions.length <= 500000
+      && data.actions.every(a => Number.isInteger(a) && a >= 0 && a <= (data.planeMode ? 3 : 2))
+      && (!data.capDistanceEvents || (Array.isArray(data.capDistanceEvents)
+        && data.capDistanceEvents.length <= 1000
+        && data.capDistanceEvents.every(e => Array.isArray(e) && e.length === 2
+          && Number.isInteger(e[0]) && e[0] >= 0 && Number.isFinite(e[1]) && e[1] >= 0)))
+      && Number.isInteger(data.ticks) && data.ticks > 0 && data.ticks <= 20000000;
+  }
+  let replays = safeRead(REPLAYS_KEY, []);
+  if (!Array.isArray(replays)) replays = [];
+  replays = replays.filter(isValidReplay);
+  const loadedImportedReplays = replays.filter(item => item.source === 'importado').slice(-10);
+  const loadedAutoReplays = replays.filter(item => item.source !== 'importado').sort((a, b) => b.distance - a.distance || b.episode - a.episode).slice(0, 10);
+  replays = [...loadedAutoReplays, ...loadedImportedReplays].sort((a, b) => b.distance - a.distance || b.episode - a.episode);
+  let replaySim = null, replayPlaying = false, replayAccumulator = 0, replayRate = 1;
+  let renderSim = sim, pausedBeforeReplay = null;
+  sim.onEpisodeEnd = result => {
+    if (result.replay && !sim.playerMode) saveBestReplay(result.replay);
+    if (sim.playerMode) {
+      playerRuns.push({ distance: result.best, date: new Date().toISOString() });
+      playerRuns = playerRuns.slice(-100);
+      safeWrite(PLAYER_RUNS_KEY, playerRuns);
+      lastBenchmarkHtml = '';
+      renderComparisonSummary();
+    }
+  };
 
   /* ---------- canvas ---------- */
   const game = $('game'), chart = $('chart');
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   game.width = W * dpr; game.height = H * dpr;
-  chart.width = W * dpr; chart.height = 170 * dpr;
+  chart.width = W * dpr; chart.height = 190 * dpr;
   const g = game.getContext('2d'), ch = chart.getContext('2d');
 
   function drawDino(d, color, alpha, champion) {
@@ -345,7 +543,7 @@ if (typeof module !== 'undefined') module.exports = DinoEngine;
     const h = d.estado === 1 ? 25 : d.estado === 4 ? 37 : 43;
     const left = Math.round(d.x), bottom = GL - Math.round(d.y - GROUND), top = bottom - h;
     const R = (x, y, ww, hh) => g.fillRect(left + x, top + y, ww, hh);
-    const step = ((sim.tick / 12) | 0) % 2;
+    const step = ((renderSim.tick / 12) | 0) % 2;
     g.globalAlpha = alpha;
     g.fillStyle = color;
     if (d.estado === 1 && d.alive) {                               // agachado
@@ -388,7 +586,7 @@ if (typeof module !== 'undefined') module.exports = DinoEngine;
                         g.fillRect(cx + tw, bottom - th * 0.45, 6, 4); g.fillRect(cx + tw + 2, bottom - th * 0.45 - 8, 4, 12); }
       }
     } else if (o.type === 5) {                                     // pássaro
-      const up = ((sim.dist / 60) | 0) % 2 === 0;
+      const up = ((renderSim.dist / 60) | 0) % 2 === 0;
       g.fillRect(left + 6, top + 14, 28, 10); g.fillRect(left + 32, top + 12, 10, 6); g.fillRect(left, top + 16, 8, 4);
       g.beginPath();
       if (up) { g.moveTo(left + 12, top + 14); g.lineTo(left + 26, top + 14); g.lineTo(left + 20, top); }
@@ -404,35 +602,53 @@ if (typeof module !== 'undefined') module.exports = DinoEngine;
   }
 
   function draw() {
+    const view = renderSim;
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.fillStyle = '#f7f7f7'; g.fillRect(0, 0, W, H);
-    for (let i = 0; i < 3; i++) {                                  // nuvens
-      const cx = (((i * 340 + 120 - sim.dist * 0.08) % (W + 120)) + W + 120) % (W + 120) - 60;
+    for (let i = 0; i < 3; i++) {
+      const cx = (((i * 340 + 120 - view.dist * 0.08) % (W + 120)) + W + 120) % (W + 120) - 60;
       g.fillStyle = '#e2e2e2'; g.fillRect(cx, 60 + i * 28, 46, 10); g.fillRect(cx + 10, 54 + i * 28, 24, 6);
     }
     g.fillStyle = INK; g.fillRect(0, GL + 1, W, 2);
     g.fillStyle = '#b5b5b5';
     for (let i = 0; i < 34; i++) {
-      const x = (((i * 79 - sim.dist) % W) + W) % W;
+      const x = (((i * 79 - view.dist) % W) + W) % W;
       g.fillRect(x, GL + 8 + (i % 3) * 6, 5 + (i % 4) * 4, 2);
     }
-    for (const o of sim.obstacles) if (o.x < W && o.x + o.w > 0) drawObstacle(o);
-    for (const d of sim.dinos) if (!d.alive && d.x > -60) drawDino(d, PALETTE[d.id % 8], 0.22, false);
-    for (const d of sim.dinos) if (d.alive && d.id !== 0) drawDino(d, PALETTE[d.id % 8], 0.6, false);
-    const champ = sim.dinos[0];
-    if (champ) drawDino(champ, PALETTE[0], champ.alive ? 1 : 0.3, true);
+    for (const o of view.obstacles) if (o.x < W && o.x + o.w > 0) drawObstacle(o);
+    if (view.replayRecord) {
+      const champ = view.dinos[view.replayDinoId];
+      if (champ) drawDino(champ, PALETTE[0], champ.alive ? 1 : 0.35, true);
+      g.fillStyle = '#1f4fd8'; g.font = 'bold 14px system-ui'; g.textAlign = 'left';
+      g.fillText(`REPLAY · EP. ${view.replayRecord.episode} · DINO #${view.replayDinoId + 1}`, 16, 24);
+    } else {
+      for (const d of view.dinos) if (!d.alive && d.x > -60) drawDino(d, PALETTE[d.id % 8], 0.22, false);
+      for (const d of view.dinos) if (d.alive && d.id !== 0) drawDino(d, PALETTE[d.id % 8], 0.6, false);
+      const champ = view.dinos[0];
+      if (champ) drawDino(champ, PALETTE[0], champ.alive ? 1 : 0.3, true);
+    }
+  }
+
+  function movingAverage(history, index, windowSize = 10) {
+    const start = Math.max(0, index - windowSize + 1);
+    const values = history.slice(start, index + 1).map(item => Number(item.avg) || 0);
+    return values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length);
   }
 
   function drawChart() {
-    const cw = W, chh = 170, c = ch;
+    const cw = W, chh = 190, c = ch;
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     c.fillStyle = '#fff'; c.fillRect(0, 0, cw, chh);
-    const hist = sim.history.slice(-300), padL = 72, padR = 14, padT = 26, padB = 22;
+    const fullHistory = sim.history;
+    const historyOffset = Math.max(0, fullHistory.length - 300);
+    const hist = fullHistory.slice(-300), padL = 72, padR = 14, padT = 32, padB = 24;
+    const moving = hist.map((_, index) => movingAverage(fullHistory, historyOffset + index, 10));
     c.font = '12px system-ui, sans-serif'; c.textBaseline = 'middle';
     c.fillStyle = '#5d6673'; c.textAlign = 'left';
     c.fillText('Distância por episódio', padL, 11);
     c.fillStyle = '#1f4fd8'; c.fillRect(padL + 150, 7, 14, 3); c.fillStyle = '#5d6673'; c.fillText('melhor', padL + 170, 11);
     c.fillStyle = '#9aa3af'; c.fillRect(padL + 226, 7, 14, 3); c.fillStyle = '#5d6673'; c.fillText('média', padL + 246, 11);
+    c.fillStyle = '#16834a'; c.fillRect(padL + 300, 7, 14, 3); c.fillStyle = '#5d6673'; c.fillText('média móvel (10)', padL + 320, 11);
     if (hist.length < 2) { c.fillStyle = '#9aa3af'; c.textAlign = 'center'; c.fillText('O gráfico aparece depois de 2 episódios.', cw / 2, chh / 2); return; }
     const max = Math.max(1, ...hist.map(h => h.best)), pw = cw - padL - padR, ph = chh - padT - padB;
     c.strokeStyle = '#e4e7ec'; c.lineWidth = 1; c.textAlign = 'right';
@@ -440,15 +656,17 @@ if (typeof module !== 'undefined') module.exports = DinoEngine;
       const y = padT + ph * i / 4; c.beginPath(); c.moveTo(padL, y); c.lineTo(cw - padR, y); c.stroke();
       c.fillStyle = '#5d6673'; c.fillText(Math.round(max * (1 - i / 4)).toLocaleString('pt-BR'), padL - 6, y);
     }
-    const line = (key, color, wd) => {
+    const line = (values, color, wd) => {
       c.strokeStyle = color; c.lineWidth = wd; c.beginPath();
-      hist.forEach((h, i) => { const x = padL + pw * i / (hist.length - 1), y = padT + ph * (1 - h[key] / max); i ? c.lineTo(x, y) : c.moveTo(x, y); });
+      values.forEach((value, i) => { const x = padL + pw * i / (values.length - 1), y = padT + ph * (1 - value / max); i ? c.lineTo(x, y) : c.moveTo(x, y); });
       c.stroke();
     };
-    line('avg', '#9aa3af', 1.5); line('best', '#1f4fd8', 2);
+    line(hist.map(h => h.avg), '#9aa3af', 1.5);
+    line(moving, '#16834a', 2);
+    line(hist.map(h => h.best), '#1f4fd8', 2);
     c.fillStyle = '#5d6673'; c.textAlign = 'center';
-    const first = sim.episode - hist.length + 1;
-    c.fillText('episódio ' + first, padL + 30, chh - 8); c.fillText('episódio ' + sim.episode, cw - padR - 40, chh - 8);
+    const first = sim.trainingEpisodes - hist.length + 1;
+    c.fillText('episódio ' + first, padL + 30, chh - 8); c.fillText('episódio ' + sim.trainingEpisodes, cw - padR - 40, chh - 8);
   }
 
   /* ---------- painel ---------- */
@@ -457,18 +675,327 @@ if (typeof module !== 'undefined') module.exports = DinoEngine;
     $('sEp').textContent = fmt(sim.episode + 1);
     $('sAlive').textContent = sim.alive + '/' + sim.dinos.length;
     $('sDist').textContent = fmt(sim.dist);
-    $('sBest').textContent = fmt(Math.max(sim.bestEver, sim.dist));
+    const humanBest = playerRuns.reduce((best, run) => Math.max(best, Number(run.distance) || 0), 0);
+    $('sBest').textContent = fmt(sim.playerMode ? Math.max(humanBest, sim.dist) : Math.max(sim.bestEver, sim.dist));
     $('sStates').textContent = fmt(sim.q.size);
     const totalDistance = sim.dinos.reduce((sum, d) => sum + (d.alive ? sim.dist : d.dist), 0);
     $('sAvg').textContent = fmt(sim.dinos.length ? totalDistance / sim.dinos.length : 0);
     $('sEps').textContent = sim.learn ? sim.epsilon.toFixed(3) : '0';
     const f = $('pEps'); if (document.activeElement !== f) f.value = sim.epsilon.toFixed(3);
+    updateLearningDebug();
+    updateActionStats();
   }
   function syncInputs() {
     $('nDinos').value = sim.numDinos; $('pAlpha').value = sim.alpha; $('pGamma').value = sim.gamma;
     $('pEps').value = sim.epsilon.toFixed(3); $('pEpsMin').value = sim.epsilonMin; $('pDecay').value = sim.epsilonDecay;
     $('pCap').value = sim.capDistance; $('chkLearn').checked = sim.learn; $('chkPlane').checked = sim.planeMode;
+    $('chkProgressive').checked = sim.progressiveDifficulty;
   }
+  function formatQ(value) { return Number(value || 0).toFixed(4).replace('.', ','); }
+  function actionLabel(action) { return ['Não agir', 'Pular', 'Abaixar', 'Voar'][action] || '—'; }
+  function obstacleLabel(type) {
+    if (type < 5) return ['Cacto pequeno', 'Cacto alto', 'Cacto estreito', 'Cacto largo', 'Cacto duplo'][type];
+    return type === 5 ? 'Pássaro' : 'Espinhos longos';
+  }
+
+  function updateLearningDebug() {
+    const d = sim.dinos[0];
+    if (!d) return;
+    const obstacle = sim.nextObstacle(d);
+    const state = sim.stateKey(d);
+    const q = sim.q.get(state) || [0, 0, 0, 0];
+    const action = sim.playerMode ? (sim.playerDuck ? 2 : d.action) : d.action;
+    $('qState').textContent = String(state);
+    $('qObstacle').textContent = obstacle ? obstacleLabel(obstacle.type) : '—';
+    $('qDistance').textContent = obstacle ? fmt(Math.max(0, obstacle.x - (d.x + 33))) + ' px' : '—';
+    $('qAction').textContent = actionLabel(action);
+    $('qReward').textContent = formatQ(d.acc);
+    $('qEpsilon').textContent = sim.playerMode ? '0 (jogador)' : sim.epsFor(d).toFixed(3);
+    $('qDifficulty').textContent = sim.progressiveDifficulty ? 'Nível ' + (sim.difficultyLevel + 1) : 'Base';
+    $('qModeHint').textContent = sim.playerMode ? 'Você está controlando o dinossauro. A tabela Q é exibida para consulta, mas não escolhe suas ações.' : 'Acompanhamento do dinossauro nº 1 (contornado), que utiliza a política aprendida sem exploração.';
+    $('qWait').textContent = formatQ(q[0]);
+    $('qJump').textContent = formatQ(q[1]);
+    $('qDuck').textContent = formatQ(q[2]);
+    $('qFly').textContent = sim.planeMode ? formatQ(q[3]) : '—';
+  }
+
+  function updateActionStats() {
+    const counts = sim.actionCounts;
+    $('actWait').textContent = fmt(counts.wait);
+    $('actJump').textContent = fmt(counts.jump);
+    $('actDuck').textContent = fmt(counts.duck);
+    $('actFly').textContent = fmt(counts.fly);
+    $('actTotal').textContent = fmt(counts.wait + counts.jump + counts.duck + counts.fly);
+    $('actionStatsHint').textContent = sim.playerMode
+      ? 'No modo jogador, os comandos manuais são contados em intervalos de decisão. Os números acumulam até zerar a sessão.'
+      : 'Contagem agregada das decisões do conjunto de dinossauros durante esta sessão.';
+  }
+
+  function average(values) { return values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0; }
+  function median(values) {
+    if (!values.length) return 0;
+    const sorted = [...values].sort((a, b) => a - b), mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+  function renderComparisonSummary() {
+    const human = playerRuns.slice(-20).map(run => Number(run.distance) || 0);
+    if (!$('comparisonResults')) return;
+    const humanCell = human.length
+      ? `<strong>${fmt(average(human))}</strong><small>Média humana (${human.length} partidas)</small>`
+      : '<strong>—</strong><small>Jogue algumas partidas para registrar resultados</small>';
+    const summaryHtml = `<div class="compare-summary"><div><strong>${fmt(sim.bestEver)}</strong><small>Recorde da IA (sessão atual)</small></div><div>${humanCell}</div><div><strong>${fmt(sim.history.length ? average(sim.history.slice(-10).map(h => h.avg)) : 0)}</strong><small>Média da IA nos últimos 10 episódios</small></div></div>`;
+    $('comparisonResults').innerHTML = lastBenchmarkHtml || summaryHtml;
+  }
+
+  function renderExperiments() {
+    const select = $('experimentSelect');
+    const selected = select.value;
+    select.innerHTML = '<option value="">Selecione um experimento</option>' + experiments.map(exp =>
+      `<option value="${String(exp.id)}">${escapeHtml(exp.name)} — ${fmt(exp.summary.episodes)} episódios</option>`).join('');
+    if (experiments.some(exp => String(exp.id) === selected)) select.value = selected;
+    if (!experiments.length) {
+      $('experimentComparison').innerHTML = 'Nenhum experimento salvo ainda.';
+      return;
+    }
+    const rows = experiments.map(exp => `<tr><td>${escapeHtml(exp.name)}</td><td>${fmt(exp.summary.episodes)}</td><td>${fmt(exp.summary.best)}</td><td>${fmt(exp.summary.avg10)}</td><td>${fmt(exp.summary.states)}</td><td>${Number(exp.summary.alpha).toFixed(3)}</td><td>${Number(exp.summary.gamma).toFixed(3)}</td></tr>`).join('');
+    $('experimentComparison').innerHTML = `<div class="table-scroll"><table class="data-table"><thead><tr><th>Experimento</th><th>Episódios</th><th>Recorde</th><th>Média (10)</th><th>Estados Q</th><th>α</th><th>γ</th></tr></thead><tbody>${rows}</tbody></table></div><p class="hint">Comparação dos snapshots salvos neste navegador. A média considera os episódios mais recentes de cada experimento.</p>`;
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+  }
+
+  function experimentSummary(data) {
+    const stats = data.stats || {}, config = data.config || {}, history = Array.isArray(stats.history) ? stats.history : [];
+    return {
+      episodes: Number(stats.trainingEpisodes ?? stats.episode) || history.length,
+      best: Number(stats.bestEver) || Math.max(0, ...history.map(h => Number(h.best) || 0)),
+      avg10: average(history.slice(-10).map(h => Number(h.avg) || 0)),
+      states: Object.keys(data.qtable || {}).length,
+      alpha: Number(config.alpha) || 0,
+      gamma: Number(config.gamma) || 0
+    };
+  }
+
+  function saveCurrentExperiment() {
+    const name = $('experimentName').value.trim() || `Experimento ${experiments.length + 1}`;
+    const data = sim.exportData();
+    const exp = { id: Date.now(), name, savedAt: new Date().toISOString(), summary: experimentSummary(data), data };
+    const previous = experiments;
+    experiments = [...experiments, exp].slice(-8);
+    if (!safeWrite(EXPERIMENTS_KEY, experiments)) {
+      experiments = previous;
+      setStatus('Armazenamento do navegador cheio. Exporte o aprendizado em JSON e remova experimentos antigos.', true);
+      return;
+    }
+    $('experimentName').value = '';
+    renderExperiments();
+    $('experimentSelect').value = String(exp.id);
+    setStatus(`Experimento “${name}” salvo. ${fmt(exp.summary.states)} estados Q registrados.`);
+  }
+
+  function loadSelectedExperiment() {
+    const id = $('experimentSelect').value;
+    const exp = experiments.find(item => String(item.id) === id);
+    if (!exp) { setStatus('Selecione um experimento para carregar.', true); return; }
+    try {
+      if (sim.playerMode) setGameMode('ai');
+      sim.importData(exp.data, 'replace');
+      syncInputs(); lastEpisode = -1; drawChart(); updateStats();
+      setStatus(`Experimento “${exp.name}” carregado.`);
+    } catch (error) { setStatus('Não foi possível carregar o experimento: ' + error.message, true); }
+  }
+
+  function deleteSelectedExperiment() {
+    const id = $('experimentSelect').value;
+    if (!id) { setStatus('Selecione um experimento para excluir.', true); return; }
+    experiments = experiments.filter(exp => String(exp.id) !== id);
+    safeWrite(EXPERIMENTS_KEY, experiments);
+    renderExperiments();
+    setStatus('Experimento excluído.');
+  }
+
+  function saveBestReplay(record) {
+    if (!isValidReplay(record)) return;
+    const saved = { ...record, savedAt: new Date().toISOString() };
+    const previous = replays;
+    const imported = replays.filter(item => item.source === 'importado').slice(-10);
+    const automatic = [...replays.filter(item => item.source !== 'importado' && item.id !== saved.id), saved]
+      .sort((a, b) => b.distance - a.distance || b.episode - a.episode).slice(0, 10);
+    replays = [...automatic, ...imported].sort((a, b) => b.distance - a.distance || b.episode - a.episode);
+    if (!safeWrite(REPLAYS_KEY, replays)) {
+      replays = previous;
+      setStatus('O replay foi gerado, mas o armazenamento local está cheio. Exporte e remova alguns replays antigos.', true);
+      return;
+    }
+    if (!replays.some(item => item.id === saved.id)) {
+      renderReplayList();
+      setStatus(`O episódio ${saved.episode} terminou, mas seu replay não entrou no Top 10 de melhores distâncias.`, false);
+      return;
+    }
+    const selectedId = $('replaySelect').value;
+    renderReplayList(selectedId && replays.some(item => item.id === selectedId) ? selectedId : saved.id);
+    setStatus(`Replay salvo: episódio ${saved.episode}, dinossauro #${saved.bestDinoId + 1}, ${fmt(saved.distance)} de distância.`);
+  }
+
+  function selectedReplay() {
+    const id = $('replaySelect').value;
+    return replays.find(item => item.id === id) || null;
+  }
+
+  function renderReplayList(preferredId = null) {
+    const select = $('replaySelect');
+    const current = preferredId || select.value;
+    select.innerHTML = '<option value="">Selecione um replay salvo</option>' + replays.map(item =>
+      `<option value="${escapeHtml(item.id)}">${item.source === 'importado' ? 'Importado · ' : ''}#${item.episode} · Dino ${item.bestDinoId + 1} · ${fmt(item.distance)} px</option>`).join('');
+    if (replays.some(item => item.id === current)) select.value = current;
+    const record = selectedReplay();
+    const automaticCount = replays.filter(item => item.source !== 'importado').length;
+    const importedCount = replays.filter(item => item.source === 'importado').length;
+    $('replayCount').textContent = `Top ${automaticCount}/10 · ${importedCount} importado(s)`;
+    if (!record) {
+      $('replayMetadata').textContent = replays.length
+        ? 'Selecione um replay para ver os detalhes e reproduzi-lo.'
+        : 'Os melhores indivíduos dos próximos episódios concluídos aparecerão aqui.';
+      $('btnReplayPlay').disabled = true;
+      $('btnReplayExport').disabled = true;
+      $('btnReplayDelete').disabled = true;
+      return;
+    }
+    $('replayMetadata').textContent = `Episódio ${record.episode} · Dino #${record.bestDinoId + 1} · ${fmt(record.distance)} px · ${record.actions.length.toLocaleString('pt-BR')} decisões · ${record.obstacles.length.toLocaleString('pt-BR')} obstáculos${record.progressiveDifficulty ? ` · dificuldade nível ${record.difficultyLevel + 1}` : ' · dificuldade base'}.`;
+    $('btnReplayPlay').disabled = false;
+    $('btnReplayExport').disabled = false;
+    $('btnReplayDelete').disabled = false;
+  }
+
+  function stopReplay(restoreMain = true) {
+    replayPlaying = false;
+    replaySim = null;
+    replayAccumulator = 0;
+    renderSim = sim;
+    if (restoreMain && pausedBeforeReplay !== null) setPaused(pausedBeforeReplay);
+    pausedBeforeReplay = null;
+    $('btnReplayPlay').textContent = 'Reproduzir';
+    $('btnReplayPause').disabled = true;
+    $('btnReplayStop').disabled = true;
+    $('replayProgress').value = 0;
+    $('replayProgressLabel').textContent = '0%';
+  }
+
+  function createReplaySimulation(record) {
+    if (!isValidReplay(record)) throw new Error('O arquivo não contém um replay válido ou compatível.');
+    return new Sim({ replayRecord: record, recordReplay: false });
+  }
+
+  function playSelectedReplay() {
+    const record = selectedReplay();
+    if (!record) { setStatus('Selecione um replay primeiro.', true); return; }
+    try {
+      if (!replaySim || replaySim.replayRecord.id !== record.id || replaySim.ended) {
+        replaySim = createReplaySimulation(record);
+        replayAccumulator = 0;
+      }
+      if (pausedBeforeReplay === null) pausedBeforeReplay = paused;
+      setPaused(true);
+      replayPlaying = true;
+      renderSim = replaySim;
+      $('btnReplayPlay').textContent = 'Reiniciar replay';
+      $('btnReplayPause').disabled = false;
+      $('btnReplayPause').textContent = 'Pausar replay';
+      $('btnReplayStop').disabled = false;
+      renderReplayProgress();
+      setStatus(`Reproduzindo episódio ${record.episode}, dinossauro #${record.bestDinoId + 1}.`);
+    } catch (error) {
+      stopReplay(false);
+      setStatus('Não foi possível reproduzir: ' + error.message, true);
+    }
+  }
+
+  function pauseReplay() {
+    if (!replaySim) return;
+    replayPlaying = !replayPlaying;
+    $('btnReplayPause').textContent = replayPlaying ? 'Pausar replay' : 'Continuar replay';
+    if (replaySim.ended) {
+      replayPlaying = false;
+      $('btnReplayPause').textContent = 'Replay concluído';
+    }
+  }
+
+  function renderReplayProgress() {
+    if (!replaySim || !replaySim.replayRecord) return;
+    const total = replaySim.replayRecord.ticks;
+    const percent = total ? Math.min(100, replaySim.tick / total * 100) : 0;
+    const replayDistance = replaySim.ended && replaySim.lastEpisodeResult
+      ? replaySim.lastEpisodeResult.best : replaySim.dist;
+    $('replayProgress').value = percent;
+    $('replayProgressLabel').textContent = `${percent.toFixed(1).replace('.', ',')}% · ${fmt(replayDistance)} px`;
+    if (replaySim.ended) {
+      $('replayMetadata').textContent = `Replay concluído · episódio ${replaySim.replayRecord.episode} · distância reproduzida: ${fmt(replayDistance)} px (registro: ${fmt(replaySim.replayRecord.distance)} px).`;
+    }
+  }
+
+  function downloadReplay(record) {
+    const blob = new Blob([JSON.stringify(record, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dino-replay_ep${record.episode}_dino${record.bestDinoId + 1}_${record.distance}px.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  $('replaySelect').addEventListener('change', () => {
+    stopReplay(true);
+    renderReplayList();
+  });
+  $('btnReplayPlay').addEventListener('click', () => {
+    if (replaySim && replaySim.replayRecord.id === selectedReplay()?.id) replaySim = null;
+    playSelectedReplay();
+  });
+  $('btnReplayPause').addEventListener('click', pauseReplay);
+  $('btnReplayStop').addEventListener('click', () => {
+    stopReplay(true);
+    setStatus('Replay encerrado. A simulação principal foi retomada conforme o estado anterior.');
+  });
+  $('replaySpeed').addEventListener('change', e => { replayRate = Number(e.target.value) || 1; });
+  $('btnReplayExport').addEventListener('click', () => {
+    const record = selectedReplay();
+    if (record) { downloadReplay(record); setStatus('Replay exportado em JSON.'); }
+  });
+  $('btnReplayDelete').addEventListener('click', () => {
+    const record = selectedReplay();
+    if (!record) return;
+    stopReplay(true);
+    replays = replays.filter(item => item.id !== record.id);
+    safeWrite(REPLAYS_KEY, replays);
+    renderReplayList();
+    setStatus('Replay excluído do histórico local.');
+  });
+  $('btnReplayImport').addEventListener('click', () => $('replayFileIn').click());
+  $('replayFileIn').addEventListener('change', e => {
+    const file = e.target.files[0]; e.target.value = '';
+    if (!file) return;
+    if (file.size > 20 * 1024 * 1024) { setStatus('O arquivo é muito grande (limite de 20 MB).', true); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        if (!isValidReplay(data)) throw new Error('Formato de replay inválido ou versão não suportada.');
+        if (replaySim) stopReplay(true);
+        const imported = { ...data, id: `${data.id || 'importado'}-${Date.now()}`, source: 'importado', importedAt: new Date().toISOString() };
+        const previous = replays;
+        const automatic = replays.filter(item => item.source !== 'importado');
+        const importedList = [...replays.filter(item => item.source === 'importado'), imported].slice(-10);
+        replays = [...automatic, ...importedList].sort((a, b) => b.distance - a.distance || b.episode - a.episode);
+        if (!safeWrite(REPLAYS_KEY, replays)) { replays = previous; throw new Error('Armazenamento local cheio; remova um replay antigo e tente novamente.'); }
+        renderReplayList(imported.id);
+        setStatus(`Replay do episódio ${imported.episode} importado e pronto para reproduzir.`);
+      } catch (error) { setStatus('Falha ao importar replay: ' + error.message, true); }
+    };
+    reader.onerror = () => setStatus('Não foi possível ler o arquivo de replay.', true);
+    reader.readAsText(file);
+  });
+
   function setStatus(msg, err) { const s = $('status'); s.textContent = msg; s.className = err ? 'err' : ''; }
   function setSpeed(i) {
     speedIdx = Math.max(0, Math.min(SPEEDS.length - 1, i));
@@ -560,7 +1087,7 @@ if (typeof module !== 'undefined') module.exports = DinoEngine;
 
   function buildExcelReport() {
     const history = sim.history.map((item, index) => ({
-      episode: Math.max(1, sim.episode - sim.history.length + index + 1),
+      episode: Math.max(1, sim.trainingEpisodes - sim.history.length + index + 1),
       best: Number(item.best) || 0,
       avg: Number(item.avg) || 0,
       status: 'Concluído'
@@ -571,33 +1098,39 @@ if (typeof module !== 'undefined') module.exports = DinoEngine;
     const currentBest = distances.length ? Math.max(...distances) : 0;
     const currentAverage = distances.length
       ? distances.reduce((sum, value) => sum + value, 0) / distances.length : 0;
-    history.push({
-      episode: sim.episode + 1,
-      best: currentBest,
-      avg: currentAverage,
-      status: 'Em andamento'
-    });
+    if (!sim.playerMode) {
+      history.push({
+        episode: sim.trainingEpisodes + 1,
+        best: currentBest,
+        avg: currentAverage,
+        status: 'Em andamento'
+      });
+    } else if (!history.length) {
+      history.push({ episode: 1, best: 0, avg: 0, status: 'Sem dados de IA' });
+    }
+    history.forEach((item, index) => { item.avg10 = movingAverage(history, index, 10); });
 
     const firstDataRow = 8;
     const lastDataRow = firstDataRow + history.length - 1;
     const averageOfAverages = history.length
       ? history.reduce((sum, row) => sum + row.avg, 0) / history.length : 0;
     const maxDistance = history.reduce((max, row) => Math.max(max, row.best), 0);
-    const modeName = sim.playerMode ? 'Jogador' : 'Inteligência artificial';
+    const modeName = sim.playerMode ? 'Jogador (histórico de IA)' : 'Inteligência artificial';
 
     const rows = [];
     rows.push(`<row r="1" ht="32" customHeight="1">${excelCellText('A1', 'Dino Q-Learning — Relatório de desempenho', 1)}</row>`);
     rows.push(`<row r="2" ht="22" customHeight="1">${excelCellText('A2', 'Histórico por episódio | Gerado em ' + new Date().toLocaleString('pt-BR'), 2)}</row>`);
     rows.push(`<row r="4">${excelCellText('A4', 'Episódios concluídos', 5)}${excelCellNumber('B4', sim.history.length, 6)}${excelCellText('C4', 'Recorde geral', 5)}${excelCellNumber('D4', Math.max(Number(sim.bestEver) || 0, maxDistance), 6)}</row>`);
     rows.push(`<row r="5">${excelCellText('A5', 'Média das médias', 5)}${excelCellNumber('B5', averageOfAverages, 6)}${excelCellText('C5', 'Modo exportado', 5)}${excelCellText('D5', modeName, 7)}</row>`);
-    rows.push(`<row r="7" ht="28" customHeight="1">${excelCellText('A7', 'Episódio', 3)}${excelCellText('B7', 'Melhor distância', 3)}${excelCellText('C7', 'Distância média', 3)}${excelCellText('D7', 'Status', 3)}</row>`);
+    rows.push(`<row r="6">${excelCellText('A6', 'Ações na sessão', 5)}${excelCellText('B6', 'Não agir: ' + fmt(sim.actionCounts.wait), 7)}${excelCellText('C6', 'Pular: ' + fmt(sim.actionCounts.jump), 7)}${excelCellText('D6', 'Abaixar: ' + fmt(sim.actionCounts.duck), 7)}${excelCellText('E6', 'Voar: ' + fmt(sim.actionCounts.fly), 7)}</row>`);
+    rows.push(`<row r="7" ht="28" customHeight="1">${excelCellText('A7', 'Episódio', 3)}${excelCellText('B7', 'Melhor distância', 3)}${excelCellText('C7', 'Distância média', 3)}${excelCellText('D7', 'Média móvel (10)', 3)}${excelCellText('E7', 'Status', 3)}</row>`);
 
     history.forEach((item, index) => {
       const row = firstDataRow + index;
-      rows.push(`<row r="${row}">${excelCellText('A' + row, 'Episódio ' + item.episode, 0)}${excelCellNumber('B' + row, item.best)}${excelCellNumber('C' + row, item.avg)}${excelCellText('D' + row, item.status, 0)}</row>`);
+      rows.push(`<row r="${row}">${excelCellText('A' + row, 'Episódio ' + item.episode, 0)}${excelCellNumber('B' + row, item.best)}${excelCellNumber('C' + row, item.avg)}${excelCellNumber('D' + row, item.avg10)}${excelCellText('E' + row, item.status, 0)}</row>`);
     });
 
-    const chartSeries = (index, titleCell, title, column, color) => {
+    const chartSeries = (index, titleCell, title, column, columnLetter, color) => {
       const points = history.map((item, i) => `<c:pt idx="${i}"><c:v>${excelXmlEscape(item[column])}</c:v></c:pt>`).join('');
       const categoryPoints = history.map((item, i) => `<c:pt idx="${i}"><c:v>${excelXmlEscape('Episódio ' + item.episode)}</c:v></c:pt>`).join('');
       return `<c:ser>
@@ -606,7 +1139,7 @@ if (typeof module !== 'undefined') module.exports = DinoEngine;
         <c:spPr><a:ln w="28575"><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:prstDash val="solid"/></a:ln></c:spPr>
         <c:marker><c:symbol val="circle"/><c:size val="5"/><c:spPr><a:solidFill><a:srgbClr val="${color}"/></a:solidFill></c:spPr></c:marker>
         <c:cat><c:strRef><c:f>'Desempenho'!$A$${firstDataRow}:$A$${lastDataRow}</c:f><c:strCache><c:ptCount val="${history.length}"/>${categoryPoints}</c:strCache></c:strRef></c:cat>
-        <c:val><c:numRef><c:f>'Desempenho'!$${column === 'best' ? 'B' : 'C'}$${firstDataRow}:$${column === 'best' ? 'B' : 'C'}$${lastDataRow}</c:f><c:numCache><c:formatCode>0.00</c:formatCode><c:ptCount val="${history.length}"/>${points}</c:numCache></c:numRef></c:val>
+        <c:val><c:numRef><c:f>'Desempenho'!$${columnLetter}$${firstDataRow}:$${columnLetter}$${lastDataRow}</c:f><c:numCache><c:formatCode>0.00</c:formatCode><c:ptCount val="${history.length}"/>${points}</c:numCache></c:numRef></c:val>
         <c:smooth val="0"/>
       </c:ser>`;
     };
@@ -618,8 +1151,9 @@ if (typeof module !== 'undefined') module.exports = DinoEngine;
         <c:chart>
           <c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr lang="pt-BR" sz="1500" b="1"/></a:pPr><a:r><a:rPr lang="pt-BR" sz="1500" b="1"/><a:t>Evolução do desempenho por episódio</a:t></a:r><a:endParaRPr lang="pt-BR"/></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>
           <c:autoTitleDeleted val="0"/><c:plotArea><c:layout/><c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>
-            ${chartSeries(0, 'B', 'Melhor distância', 'best', '1F4FD8')}
-            ${chartSeries(1, 'C', 'Distância média', 'avg', '8993A4')}
+            ${chartSeries(0, 'B', 'Melhor distância', 'best', 'B', '1F4FD8')}
+            ${chartSeries(1, 'C', 'Distância média', 'avg', 'C', '8993A4')}
+            ${chartSeries(2, 'D', 'Média móvel (10)', 'avg10', 'D', '16834A')}
             <c:dropLines/><c:hiLowLines/><c:upDownBars/><c:marker val="1"/><c:smooth val="0"/><c:axId val="123456"/><c:axId val="123457"/>
           </c:lineChart>
           <c:catAx><c:axId val="123456"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="123457"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/><c:tickLblSkip val="${skipLabels}"/></c:catAx>
@@ -631,9 +1165,9 @@ if (typeof module !== 'undefined') module.exports = DinoEngine;
     const sheetRows = rows.join('');
     const sheetXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
       <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-        <dimension ref="A1:D${lastDataRow}"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="7" topLeftCell="A8" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A8" sqref="A8"/></sheetView></sheetViews>
-        <sheetFormatPr defaultRowHeight="18"/><cols><col min="1" max="1" width="25" customWidth="1"/><col min="2" max="3" width="22" customWidth="1"/><col min="4" max="4" width="18" customWidth="1"/></cols>
-        <sheetData>${sheetRows}</sheetData><autoFilter ref="A7:D${lastDataRow}"/><mergeCells count="2"><mergeCell ref="A1:D1"/><mergeCell ref="A2:D2"/></mergeCells><drawing r:id="rId1"/>
+        <dimension ref="A1:E${lastDataRow}"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="7" topLeftCell="A8" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A8" sqref="A8"/></sheetView></sheetViews>
+        <sheetFormatPr defaultRowHeight="18"/><cols><col min="1" max="1" width="25" customWidth="1"/><col min="2" max="4" width="22" customWidth="1"/><col min="5" max="5" width="18" customWidth="1"/></cols>
+        <sheetData>${sheetRows}</sheetData><autoFilter ref="A7:E${lastDataRow}"/><mergeCells count="2"><mergeCell ref="A1:E1"/><mergeCell ref="A2:E2"/></mergeCells><drawing r:id="rId1"/>
       </worksheet>`;
 
     const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -690,7 +1224,13 @@ if (typeof module !== 'undefined') module.exports = DinoEngine;
   numInput('pEps', 'epsilon', 0, 1); numInput('pEpsMin', 'epsilonMin', 0, 1); numInput('pDecay', 'epsilonDecay', 0.5, 1);
   $('pCap').addEventListener('input', e => {
     const v = parseFloat(e.target.value);
-    if (Number.isFinite(v)) sim.capDistance = Math.max(0, v);
+    if (Number.isFinite(v)) {
+      const nextCap = Math.max(0, v);
+      if (nextCap !== sim.capDistance) {
+        sim.capDistance = nextCap;
+        if (sim.recordReplay && !sim.playerMode) sim.episodeCapDistanceEvents.push([sim.tick, nextCap]);
+      }
+    }
   });
   $('nDinos').addEventListener('input', e => {
     const v = parseInt(e.target.value, 10);
@@ -698,10 +1238,23 @@ if (typeof module !== 'undefined') module.exports = DinoEngine;
   });
   $('speed').addEventListener('input', e => setSpeed(+e.target.value));
   $('btnPause').addEventListener('click', () => setPaused(!paused));
-  $('btnNew').addEventListener('click', () => { sim.newEpisode(); setStatus('Novo episódio iniciado.'); });
+  $('btnNew').addEventListener('click', () => { if (replaySim) stopReplay(true); sim.newEpisode(); setStatus('Novo episódio iniciado.'); });
   $('chkDraw').addEventListener('change', e => { drawOn = e.target.checked; if (!drawOn) { g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = '#f7f7f7'; g.fillRect(0, 0, W, H); g.fillStyle = '#5d6673'; g.font = '15px system-ui'; g.textAlign = 'center'; g.fillText('Desenho desligado: o treino roda mais rápido.', W / 2, H / 2); } });
   $('chkLearn').addEventListener('change', e => { sim.learn = e.target.checked; });
   $('chkPlane').addEventListener('change', e => { sim.planeMode = e.target.checked; sim.newEpisode(); setStatus(sim.planeMode ? 'Modo avião ligado: espinhos longos exigem voar.' : 'Modo avião desligado.'); });
+  $('chkProgressive').addEventListener('change', e => {
+    sim.progressiveDifficulty = e.target.checked;
+    sim.progressiveEpisodes = 0;
+    sim.difficultyLevel = 0;
+    sim.newEpisode();
+    setStatus(sim.progressiveDifficulty
+      ? 'Dificuldade progressiva ativada: velocidade e obstáculos evoluem a cada 5 episódios.'
+      : 'Dificuldade progressiva desativada. A simulação voltou à dificuldade base.');
+    updateLearningDebug();
+  });
+  $('btnSaveExperiment').addEventListener('click', saveCurrentExperiment);
+  $('btnLoadExperiment').addEventListener('click', loadSelectedExperiment);
+  $('btnDeleteExperiment').addEventListener('click', deleteSelectedExperiment);
 
   /* ---------- exportar / importar ---------- */
   $('btnExport').addEventListener('click', () => {
@@ -737,6 +1290,54 @@ if (typeof module !== 'undefined') module.exports = DinoEngine;
     if (confirm('Apagar toda a tabela Q e o histórico? Exporte antes se quiser guardar.')) { sim.reset(); lastEpisode = -1; syncInputs(); setStatus('Aprendizado zerado.'); }
   });
 
+  function runOneBenchmark(agentMode, seed, qSource, planeMode) {
+    const test = new Sim({
+      numDinos: 1, learn: false, epsilon: 0, planeMode,
+      capDistance: 3500, progressiveDifficulty: false, seed, agentMode, recordReplay: false
+    });
+    if (agentMode === 'q') {
+      // A simulação de benchmark não aprende; pode consultar a tabela original sem copiá-la.
+      test.q = qSource;
+    }
+    let guard = 0;
+    while (test.episode === 0 && guard < 20000) { test.step(); guard++; }
+    return test.lastEpisodeResult ? test.lastEpisodeResult.best : test.dist;
+  }
+
+  function runBenchmark() {
+    const button = $('btnCompare');
+    const count = Math.max(3, Math.min(30, Number.parseInt($('benchmarkRuns').value, 10) || 10));
+    $('benchmarkRuns').value = count;
+    button.disabled = true;
+    button.textContent = 'Comparando…';
+    const wasPaused = paused;
+    setPaused(true);
+    try {
+      const trainedScores = [], randomScores = [];
+      for (let i = 0; i < count; i++) {
+        // A semente do mundo é igual para IA e agente aleatório; o fluxo aleatório da política é separado.
+        const seed = (741103 + i * 7919) >>> 0;
+        trainedScores.push(runOneBenchmark('q', seed, sim.q, sim.planeMode));
+        randomScores.push(runOneBenchmark('random', seed, sim.q, sim.planeMode));
+      }
+      const humanScores = playerRuns.slice(-20).map(run => Number(run.distance) || 0);
+      const line = (label, values, note) => values.length
+        ? `<tr><th>${label}</th><td>${fmt(average(values))}</td><td>${fmt(median(values))}</td><td>${fmt(Math.max(...values))}</td><td>${values.length}</td><td>${note}</td></tr>`
+        : `<tr><th>${label}</th><td colspan="5">Sem partidas registradas</td></tr>`;
+      lastBenchmarkHtml = `<div class="table-scroll"><table class="data-table"><thead><tr><th>Agente</th><th>Média</th><th>Mediana</th><th>Melhor</th><th>Partidas</th><th>Condição</th></tr></thead><tbody>${line('IA treinada', trainedScores, 'Cenários com sementes fixas')}${line('Aleatório', randomScores, 'Mesmas sementes da IA')}${line('Jogador humano', humanScores, 'Últimas partidas reais')}</tbody></table></div><p class="hint">A IA e o agente aleatório enfrentaram sequências equivalentes de obstáculos, com até 3.500 unidades de distância por teste. As partidas humanas são observacionais e não usam as mesmas sementes.</p>`;
+      $('comparisonResults').innerHTML = lastBenchmarkHtml;
+      setStatus(`Comparação concluída: ${count} cenários pareados para IA e agente aleatório.`);
+    } catch (error) {
+      console.error(error);
+      setStatus('Falha na comparação: ' + (error.message || 'erro inesperado.'), true);
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Executar comparação';
+      setPaused(wasPaused);
+    }
+  }
+  $('btnCompare').addEventListener('click', runBenchmark);
+
   window.addEventListener('keydown', e => {
     const t = e.target.tagName;
     if (t === 'INPUT' || t === 'SELECT' || t === 'TEXTAREA' || e.ctrlKey || e.metaKey || e.altKey) return;
@@ -771,12 +1372,15 @@ if (typeof module !== 'undefined') module.exports = DinoEngine;
   let savedAIConfig = null;
 
   function setGameMode(mode) {
+    if (replaySim) stopReplay(true);
     if (mode === 'player') {
       if (!sim.playerMode) {
         savedAIConfig = {
           numDinos: sim.numDinos,
           learn: sim.learn,
-          planeMode: sim.planeMode
+          planeMode: sim.planeMode,
+          progressiveDifficulty: sim.progressiveDifficulty,
+          progressiveEpisodes: sim.progressiveEpisodes
         };
       }
       sim.playerMode = true;
@@ -796,6 +1400,8 @@ if (typeof module !== 'undefined') module.exports = DinoEngine;
         sim.numDinos = savedAIConfig.numDinos;
         sim.learn = savedAIConfig.learn;
         sim.planeMode = savedAIConfig.planeMode;
+        sim.progressiveDifficulty = savedAIConfig.progressiveDifficulty;
+        sim.progressiveEpisodes = savedAIConfig.progressiveEpisodes;
       }
       savedAIConfig = null;
       $('nDinos').disabled = false;
@@ -853,11 +1459,27 @@ if (typeof module !== 'undefined') module.exports = DinoEngine;
         }
       }
     }
+    if (replaySim && replayPlaying) {
+      replayAccumulator += dt / 1000 * TICK_HZ * replayRate;
+      const replayTicks = Math.floor(replayAccumulator);
+      replayAccumulator -= replayTicks;
+      if (replayTicks > 0) replaySim.run(replayTicks);
+      if (replaySim.ended) {
+        replayPlaying = false;
+        $('btnReplayPause').textContent = 'Replay concluído';
+        renderReplayProgress();
+        setStatus(`Replay concluído: ${fmt(replaySim.lastEpisodeResult?.best ?? replaySim.dist)} de distância reproduzida.`);
+      }
+      if (ts - lastReplayUi > 100) { lastReplayUi = ts; renderReplayProgress(); }
+    }
     if (drawOn) draw();
     if (sim.episode !== lastEpisode) { lastEpisode = sim.episode; drawChart(); }
     if (ts - lastStats > 120) { lastStats = ts; updateStats(); }
   }
 
+  renderExperiments();
+  renderReplayList();
+  renderComparisonSummary();
   syncInputs(); setSpeed(speedIdx); updateStats(); drawChart();
   requestAnimationFrame(frame);
 })();
